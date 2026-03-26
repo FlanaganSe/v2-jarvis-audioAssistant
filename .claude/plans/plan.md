@@ -13,42 +13,48 @@ Jarvis V1 was built all-at-once, making it hard to debug, reason about, or exten
 
 ### 2. Requirements
 
-| ID | Requirement | Priority |
-|----|------------|----------|
-| R1 | Low-latency, natural voice conversation via push-to-talk | P0 |
-| R2 | Cross-session recall ("What were we talking about yesterday?") | P0 |
-| R3 | Answer questions about GitHub repos/issues/PRs/comments from URLs | P0 |
-| R4 | Audible indication when Jarvis is working (tool execution) | P0 |
-| R5 | Interruption support (pause when user starts talking) | P0 |
-| R6 | Jarvis communicates its capabilities and limitations | P0 |
-| R7 | Never fabricate — say "I don't know" when facts are unsupported | P0 |
-| R8 | At least one API-backed factual capability (weather) | P0 |
-| R9 | Deploy to Railway | P1 |
-| R10 | GitHub Actions CI/CD | P1 |
-| R11 | Session rollover before 60-minute expiry | P0 |
-| R12 | Audible status differentiation (working vs. thinking vs. speaking) | P2 |
+| ID  | Requirement                                                        | Priority |
+| --- | ------------------------------------------------------------------ | -------- |
+| R1  | Low-latency, natural voice conversation via push-to-talk           | P0       |
+| R2  | Cross-session recall ("What were we talking about yesterday?")     | P0       |
+| R3  | Answer questions about GitHub repos/issues/PRs/comments from URLs  | P0       |
+| R4  | Audible indication when Jarvis is working (tool execution)         | P0       |
+| R5  | Interruption support (pause when user starts talking)              | P0       |
+| R6  | Jarvis communicates its capabilities and limitations               | P0       |
+| R7  | Never fabricate — say "I don't know" when facts are unsupported    | P0       |
+| R8  | At least one API-backed factual capability (weather)               | P0       |
+| R9  | Deploy to Railway                                                  | P1       |
+| R10 | GitHub Actions CI/CD                                               | P1       |
+| R11 | Session rollover before 60-minute expiry                           | P0       |
+| R12 | Audible status differentiation (working vs. thinking vs. speaking) | P2       |
 
 ### 3. Acceptance criteria
 
 **Voice loop (R1, R5):**
+
 - Given a user presses push-to-talk → When they speak and release → Then Jarvis responds with audio within a conversational delay
 - Given Jarvis is speaking → When the user presses push-to-talk → Then Jarvis stops speaking immediately
 
 **Memory (R2):**
+
 - Given a user had a conversation yesterday → When they ask "What did we talk about yesterday?" → Then Jarvis recalls topics from that session with correct attribution
 
 **GitHub (R3):**
+
 - Given a user provides a GitHub repo URL → When they ask "What does this repo do?" → Then Jarvis answers using fetched repo content with evidence
 - Given a user provides a GitHub issue URL → When they ask about it → Then Jarvis summarizes the issue and its comments
 
 **Evidence & refusal (R7):**
+
 - Given a question with no supporting evidence → When Jarvis responds → Then it says a variant of "I don't know" instead of guessing
 - Given a tool-backed answer → When stored → Then an `Evidence` record is persisted with source URL and timestamp
 
 **Working indicator (R4):**
+
 - Given Jarvis invokes a tool → When the tool is executing → Then the user hears/sees a working indication before the answer
 
 **Deploy (R9):**
+
 - Given the app is deployed to Railway → When a user visits the URL → Then they can have a voice conversation with all features working
 
 ### 4. Non-goals
@@ -65,16 +71,16 @@ Jarvis V1 was built all-at-once, making it hard to debug, reason about, or exten
 
 ### 5. Constraints
 
-| Constraint | Reason |
-|-----------|--------|
-| Must target OpenAI Realtime GA, not Beta | Beta deprecated May 7 2026 (~6 weeks) |
-| Model: `gpt-realtime-1.5` | Best GA voice model, same pricing as predecessor |
-| Railway Hobby plan minimum ($5/mo) | Free plan forces serverless, incompatible with voice |
-| 60-minute max session duration | OpenAI hard limit; rollover required |
+| Constraint                                                                                            | Reason                                                                           |
+| ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Must target OpenAI Realtime GA, not Beta                                                              | Beta deprecated May 7 2026 (~6 weeks)                                            |
+| Model: `gpt-realtime-1.5`                                                                             | Best GA voice model, same pricing as predecessor                                 |
+| Railway Hobby plan minimum ($5/mo)                                                                    | Free plan forces serverless, incompatible with voice                             |
+| 60-minute max session duration                                                                        | OpenAI hard limit; rollover required                                             |
 | 32K context window; 16K cap on instructions + tool defs; ~12K for conversation history; 4K max output | Instructions + tools must stay lean; conversation context is the flexible budget |
-| No structured outputs on Realtime models | Tool args must be validated server-side |
-| TypeScript only | Per requirements + stack rules |
-| Sideband auth: docs indicate server API key | M1 spike validates this works in practice |
+| No structured outputs on Realtime models                                                              | Tool args must be validated server-side                                          |
+| TypeScript only                                                                                       | Per requirements + stack rules                                                   |
+| Sideband auth: docs indicate server API key                                                           | M1 spike validates this works in practice                                        |
 
 ---
 
@@ -96,7 +102,14 @@ The project is empty scaffolding: `CLAUDE.md`, `docs/requirements.md`, `.plans/r
 
 Four milestones. M1 is the architecture validation gate — if it fails, we know immediately. M2-M4 build on a validated foundation.
 
-- [ ] **M1: Foundation + Voice Spike** — Validate the entire voice architecture end-to-end
+- [x] **M1: Foundation + Voice Spike** — Validate the entire voice architecture end-to-end
+  - [x] Step 1 — Project scaffolding (package.json, tsconfig, eslint, prettier, vitest) → verify: `npm run lint && npm run typecheck && npm test`
+  - [x] Step 2 — Config + Fastify server core (config.ts, app.ts, server.ts, health endpoint) → verify: `npm run typecheck`
+  - [x] Step 3 — Session endpoint + sideband manager (POST /api/session, POST /api/session/sideband, echo tool via raw WS) → verify: `npm run typecheck`
+  - [x] Step 4 — Browser client (index.html, app.js, ui.js with raw WebRTC, PTT, data channel) → verify: manual browser test
+  - [x] Step 5 — Unit tests (config validation, session route with mocked fetch) → verify: `npm test && npm run lint && npm run typecheck`
+        Commit: "feat: M1 foundation + voice spike"
+        Note: Using Option C from research — raw WebRTC on browser, raw WS sideband on server. SDK deferred to M2.
 - [ ] **M2: Persistence + Memory** — Add durable storage, cross-session recall, and session rollover
 - [ ] **M3: Tools + Evidence** — Add GitHub, weather, capabilities, and the evidence/refusal contract
 - [ ] **M4: Deploy + Polish + CI** — Railway deployment, client polish, GitHub Actions, evals
@@ -140,6 +153,7 @@ project root
 - `call_id` relay: browser posts SDP to `/v1/realtime/calls` with ephemeral key, gets `call_id` from Location header, sends it back to server (e.g., `POST /api/session/:id/sideband`) so server can connect sideband WS
 
 **Spike exit criteria (must pass before proceeding):**
+
 - [ ] Voice round-trip: user speaks → Jarvis responds with audio
 - [ ] Push-to-talk: manual commit on release, no VAD
 - [ ] Interruption: Jarvis stops speaking when user presses PTT
@@ -152,14 +166,15 @@ project root
 
 **If the spike fails:**
 
-| Failure | Pivot |
-|---------|-------|
+| Failure                                           | Pivot                                                                                                                                                 |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Sideband auth doesn't work (ephemeral or API key) | Fall back to full server relay (server mediates all audio). Latency changes but M2–M4 design is unaffected — persistence layer is transport-agnostic. |
-| WebRTC latency is unacceptable | Try WebSocket transport instead. More implementation complexity but more control. |
-| Interruption is broken | Investigate client-side truncation. If WebRTC interruption is fundamentally broken, WebSocket gives more control. |
-| `@openai/agents-realtime` SDK too unstable | Drop to raw `openai` SDK + manual WebRTC/WebSocket setup. More code but fewer moving parts. |
+| WebRTC latency is unacceptable                    | Try WebSocket transport instead. More implementation complexity but more control.                                                                     |
+| Interruption is broken                            | Investigate client-side truncation. If WebRTC interruption is fundamentally broken, WebSocket gives more control.                                     |
+| `@openai/agents-realtime` SDK too unstable        | Drop to raw `openai` SDK + manual WebRTC/WebSocket setup. More code but fewer moving parts.                                                           |
 
 **Testing:**
+
 - Unit: config validation, ephemeral key generation logic
 - Manual: voice round-trip, interruption, tool execution, latency feel
 - Spike results documented in `docs/decisions.md` as ADRs
@@ -169,6 +184,7 @@ project root
 **Goal:** Store conversation history durably and enable cross-session recall.
 
 **What gets built:**
+
 - PostgreSQL connection via Drizzle ORM
 - Database schema:
   - `sessions` (id, started_at, ended_at, metadata)
@@ -185,12 +201,14 @@ project root
 - Seeding script for dev/demo data
 
 **Schema design notes:**
+
 - No vector columns in MVP — adding an embedding column to `session_summaries` later is a single additive migration. This avoids requiring pgvector extension on vanilla PostgreSQL (both `postgres:16` Docker image and Railway default template lack it).
 - All timestamps with timezone
 - Foreign keys for referential integrity
 - JSONB for flexible metadata, entities, key_facts
 
 **Testing:**
+
 - Unit: recall query construction, summary extraction, date parsing for "yesterday"/"last week"
 - Integration: DB round-trip (insert turns → query recall → verify results) — real PostgreSQL
 - Manual: multi-session recall scenario, rollover continuity
@@ -200,6 +218,7 @@ project root
 **Goal:** Add the real capabilities — GitHub, weather, self-description — with the evidence and refusal contract.
 
 **What gets built:**
+
 - Evidence framework:
   - `Evidence` interface (matches research spec: sourceId, sourceType, sourceUrl, snippet, retrievedAt)
   - Helper to create, validate, and persist evidence
@@ -226,6 +245,7 @@ project root
 - System prompt engineering: bring all capabilities, limitations, and behavior rules together
 
 **Testing:**
+
 - Unit: URL parser (parameterized: repo, file, issue, PR, comment, invalid), weather response mapping, evidence creation, capabilities text
 - Integration: GitHub fetch → evidence → DB pipeline (mock GitHub API responses via MSW or similar)
 - Manual: ask about a real repo, ask for weather, ask unsupported question, verify refusal
@@ -237,6 +257,7 @@ project root
 **Goal:** Ship it. Working demo on Railway with CI and polished UX.
 
 **What gets built:**
+
 - Client UI polish:
   - Visual status states: idle, listening, processing, speaking (CSS state machine)
   - Live transcript display
@@ -266,6 +287,7 @@ project root
 - Eval suite: recall, refusal, evidence — runnable via `npm run eval`
 
 **Testing:**
+
 - CI runs all unit + integration tests on every push
 - Manual: full voice session on deployed Railway instance
 - Eval suite validates recall accuracy, refusal rate, evidence attachment rate
@@ -275,16 +297,17 @@ project root
 **Framework:** Vitest (already in stack rules)
 **Convention:** Co-located tests (`foo.ts` → `foo.test.ts`)
 
-| Layer | What | How | When |
-|-------|------|-----|------|
-| Unit | Config validation, URL parsing, evidence helpers, query builders, date logic | Vitest, pure functions, no mocks where possible | Every milestone |
-| Integration | DB operations, tool→evidence→DB pipeline, session lifecycle | Vitest, real PostgreSQL (Docker or Railway dev DB) | M2, M3, M4 |
-| Spike | Voice latency, interruption, sideband, working indicator | Manual with documented results → ADRs in `docs/decisions.md` | M1 |
-| Eval | Recall accuracy, refusal rate, evidence rate | Scripts in `scripts/eval-*.ts`, runnable via `npm run eval` | M3, M4 |
-| E2E | Full voice session with all features | Manual on local + Railway | M4 |
-| CI | Lint + typecheck + unit + integration | GitHub Actions | M4 (runs on every push after setup) |
+| Layer       | What                                                                         | How                                                          | When                                |
+| ----------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------ | ----------------------------------- |
+| Unit        | Config validation, URL parsing, evidence helpers, query builders, date logic | Vitest, pure functions, no mocks where possible              | Every milestone                     |
+| Integration | DB operations, tool→evidence→DB pipeline, session lifecycle                  | Vitest, real PostgreSQL (Docker or Railway dev DB)           | M2, M3, M4                          |
+| Spike       | Voice latency, interruption, sideband, working indicator                     | Manual with documented results → ADRs in `docs/decisions.md` | M1                                  |
+| Eval        | Recall accuracy, refusal rate, evidence rate                                 | Scripts in `scripts/eval-*.ts`, runnable via `npm run eval`  | M3, M4                              |
+| E2E         | Full voice session with all features                                         | Manual on local + Railway                                    | M4                                  |
+| CI          | Lint + typecheck + unit + integration                                        | GitHub Actions                                               | M4 (runs on every push after setup) |
 
 **Scripts:**
+
 - `npm test` — unit tests
 - `npm run test:integration` — integration tests (requires PostgreSQL)
 - `npm run eval` — evaluation scripts (requires running server + API keys)
@@ -299,62 +322,66 @@ project root
 
 ### 7. Manual setup tasks
 
-| Task | Description | Depends on |
-|------|------------|------------|
-| **OpenAI API key** | Create/locate API key with Realtime API access. Set as `OPENAI_API_KEY` env var. | M1 |
-| **Local PostgreSQL** | Run PostgreSQL locally (Docker recommended: `docker run -e POSTGRES_PASSWORD=dev -p 5432:5432 postgres:16`). Or use a Railway dev database. | M2 |
-| **GitHub PAT** | Create fine-grained PAT with read-only access to target repos. Set as `GITHUB_TOKEN` env var. Wrap behind `getGitHubToken()` abstraction for future GitHub App migration. | M3 |
-| **Railway Hobby plan** | Sign up for Railway Hobby plan ($5/mo). Create project. | M4 |
-| **Railway PostgreSQL** | Provision PostgreSQL service in Railway project. Note connection string. | M4 |
-| **Railway service config** | Deploy service, disable serverless mode, set env vars (OPENAI_API_KEY, GITHUB_TOKEN, DATABASE_URL). | M4 |
-| **Railway domain** | Generate public domain for the service. | M4 |
-| **GitHub repo setup** | Push to GitHub, enable Actions. Add Railway deploy token as secret if using CD. | M4 |
+| Task                       | Description                                                                                                                                                               | Depends on |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| **OpenAI API key**         | Create/locate API key with Realtime API access. Set as `OPENAI_API_KEY` env var.                                                                                          | M1         |
+| **Local PostgreSQL**       | Run PostgreSQL locally (Docker recommended: `docker run -e POSTGRES_PASSWORD=dev -p 5432:5432 postgres:16`). Or use a Railway dev database.                               | M2         |
+| **GitHub PAT**             | Create fine-grained PAT with read-only access to target repos. Set as `GITHUB_TOKEN` env var. Wrap behind `getGitHubToken()` abstraction for future GitHub App migration. | M3         |
+| **Railway Hobby plan**     | Sign up for Railway Hobby plan ($5/mo). Create project.                                                                                                                   | M4         |
+| **Railway PostgreSQL**     | Provision PostgreSQL service in Railway project. Note connection string.                                                                                                  | M4         |
+| **Railway service config** | Deploy service, disable serverless mode, set env vars (OPENAI_API_KEY, GITHUB_TOKEN, DATABASE_URL).                                                                       | M4         |
+| **Railway domain**         | Generate public domain for the service.                                                                                                                                   | M4         |
+| **GitHub repo setup**      | Push to GitHub, enable Actions. Add Railway deploy token as secret if using CD.                                                                                           | M4         |
 
 ### 8. Risks
 
-| Risk | Severity | Mitigation |
-|------|----------|------------|
-| **Sideband auth token** — docs indicate server API key for sideband WebSocket, but untested in our stack | Medium | M1 spike validates. If it doesn't work as documented: fall back to full relay (server mediates audio). Document finding as ADR. |
-| **Sideband instability on Railway** — WebSocket keepalive, proxy behavior | High | M1 spike runs on Railway early. 25s keepalive ping. If unstable: full relay fallback. |
-| **Interruption quality** — may not feel immediate enough | Medium | M1 spike evaluates subjectively. If poor: tune VAD settings, add client-side audio stop, or accept degraded UX for demo. |
-| **Tool latency damages voice UX** — GitHub/weather calls take seconds | Medium | M3 adds audible working indicator + system prompt "announce before calling tools." Async tool execution keeps session alive during wait. |
-| **60-minute session rollover** — state transfer is tricky | Medium | M2 implements proactive rollover at ~55 min. Summary + recent turns + active context carried forward. If rollover fails: session ends cleanly, user starts fresh. |
-| **OpenAI Realtime API changes** — pre-1.0 SDK, evolving API | Medium | Pin exact versions of `@openai/agents` and `@openai/agents-realtime`. Recheck at each milestone start. |
-| **Railway host binding** — `::` vs `0.0.0.0` inconsistency in docs | Low | Try `::` (Fastify guide). If fails, try `0.0.0.0`. Document in deployment config. |
-| **Context window pressure** — 16K cap on instructions + tools is tight; ~12K conversation budget is more generous but still finite | Medium | Keep tool definitions lean. Monitor token usage in M2; compress conversation context only when approaching limits. |
-| **GitHub API rate limits** — 5000 req/hr for PAT, less for unauthenticated | Low | `@octokit/plugin-throttling` from day one. Cache fetched artifacts. |
+| Risk                                                                                                                               | Severity | Mitigation                                                                                                                                                        |
+| ---------------------------------------------------------------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Sideband auth token** — docs indicate server API key for sideband WebSocket, but untested in our stack                           | Medium   | M1 spike validates. If it doesn't work as documented: fall back to full relay (server mediates audio). Document finding as ADR.                                   |
+| **Sideband instability on Railway** — WebSocket keepalive, proxy behavior                                                          | High     | M1 spike runs on Railway early. 25s keepalive ping. If unstable: full relay fallback.                                                                             |
+| **Interruption quality** — may not feel immediate enough                                                                           | Medium   | M1 spike evaluates subjectively. If poor: tune VAD settings, add client-side audio stop, or accept degraded UX for demo.                                          |
+| **Tool latency damages voice UX** — GitHub/weather calls take seconds                                                              | Medium   | M3 adds audible working indicator + system prompt "announce before calling tools." Async tool execution keeps session alive during wait.                          |
+| **60-minute session rollover** — state transfer is tricky                                                                          | Medium   | M2 implements proactive rollover at ~55 min. Summary + recent turns + active context carried forward. If rollover fails: session ends cleanly, user starts fresh. |
+| **OpenAI Realtime API changes** — pre-1.0 SDK, evolving API                                                                        | Medium   | Pin exact versions of `@openai/agents` and `@openai/agents-realtime`. Recheck at each milestone start.                                                            |
+| **Railway host binding** — `::` vs `0.0.0.0` inconsistency in docs                                                                 | Low      | Try `::` (Fastify guide). If fails, try `0.0.0.0`. Document in deployment config.                                                                                 |
+| **Context window pressure** — 16K cap on instructions + tools is tight; ~12K conversation budget is more generous but still finite | Medium   | Keep tool definitions lean. Monitor token usage in M2; compress conversation context only when approaching limits.                                                |
+| **GitHub API rate limits** — 5000 req/hr for PAT, less for unauthenticated                                                         | Low      | `@octokit/plugin-throttling` from day one. Cache fetched artifacts.                                                                                               |
 
 ### 9. Open questions
 
 These need human input before or during implementation:
 
-| Question | Affects | Default if no answer |
-|----------|---------|---------------------|
-| **What latency threshold defines "good enough"?** | M1 spike exit criteria | 500ms to first audio feels conversational |
-| **What should the audible working cue be?** Tone, spoken phrase, model placeholder, or combination? | M3 working indicator | System prompt instructs Jarvis to say "Let me check on that" + client-side visual indicator |
-| **Is private GitHub support in MVP?** | M3 GitHub tool scope, auth complexity | No — public repos only via PAT |
-| **Data retention duration for demo?** | M2 schema, cleanup scripts | Keep everything (demo, not production) |
-| **What degraded behavior when GitHub/weather/memory fails?** | M3 error handling | Jarvis says "I'm having trouble reaching [service] right now" — graceful degradation, not crash |
-| **Monorepo or single package?** V1 used pnpm workspaces (server/client/shared). V2 client is much thinner — a single package with `public/` for static files may be simpler. | M1 project structure | Single package. Client is static HTML/JS in `public/`. Server is `src/`. |
+| Question                                                                                                                                                                     | Affects                               | Default if no answer                                                                            |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------- | --------------- |
+| **What latency threshold defines "good enough"?**                                                                                                                            | M1 spike exit criteria                | 500ms to first audio feels conversational                                                       | LOW AS POSSIBLE |
+| **What should the audible working cue be?** Tone, spoken phrase, model placeholder, or combination?                                                                          | M3 working indicator                  | Whatever seems best practice / highest quality / polished                                       |
+| **Is private GitHub support in MVP?**                                                                                                                                        | M3 GitHub tool scope, auth complexity | No — public repos only via PAT                                                                  |
+| **Data retention duration for demo?**                                                                                                                                        | M2 schema, cleanup scripts            | Keep everything (demo, not production)                                                          |
+| **What degraded behavior when GitHub/weather/memory fails?**                                                                                                                 | M3 error handling                     | Jarvis says "I'm having trouble reaching [service] right now" — graceful degradation, not crash |
+| **Monorepo or single package?** V1 used pnpm workspaces (server/client/shared). V2 client is much thinner — a single package with `public/` for static files may be simpler. | M1 project structure                  | Single package. Client is static HTML/JS in `public/`. Server is `src/`.                        |
 
 ### 10. Package baseline
 
 From research, verified 2026-03-26. Recheck at implementation time.
 
 **Core:**
+
 - `typescript` 5.x, `node` 22+
 - `fastify` 5.8.4, `@fastify/cors` 11.2.0, `@fastify/static` 9.x, `@fastify/websocket` 11.2.0
 - `@openai/agents` 0.8.1 (pin exact), `@openai/agents-realtime` 0.8.1 (pin exact)
 - `openai` 6.33.0, `zod` 4.3.6, `ws` 8.x
 
 **Database:**
+
 - `drizzle-orm` 0.45.1, `drizzle-kit`, `drizzle-zod` 0.8.3
 - `postgres` (pg driver) or `@neondatabase/serverless`
 
 **GitHub:**
+
 - `@octokit/rest` 22.0.1, `@octokit/plugin-throttling` 11.0.3, `@octokit/plugin-paginate-rest` 14.0.0
 
 **Dev:**
+
 - `vitest`, `eslint`, `prettier`, `tsx` (for dev server)
 
 ### 11. Architecture diagram (text)
@@ -405,6 +432,7 @@ After M1 spike, document these in `docs/decisions.md`:
 - **ADR-004:** Single package vs monorepo
 
 After M2:
+
 - **ADR-005:** Session rollover strategy — timing, state carried forward
 - **ADR-006:** Memory retrieval approach — SQL-first, what queries
 
