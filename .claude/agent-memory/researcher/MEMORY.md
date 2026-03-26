@@ -1,5 +1,3 @@
-# Agent Memory Index
+# Memory Index
 
-## Project
-- [Jarvis project context](./project_jarvis_context.md) — use case, requirements, constraints for the Jarvis voice assistant
-- [Voice provider recommendation (March 2026)](./project_voice_provider_recommendation.md) — Deepgram Voice Agent API as primary recommendation; do not use Vapi
+- [project_agents_realtime_sdk.md](project_agents_realtime_sdk.md) — Key facts about @openai/agents-realtime v0.8.1: exports, WebRTC flow, tool execution, sideband pattern
