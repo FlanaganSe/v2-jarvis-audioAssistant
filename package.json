@@ -10,12 +10,17 @@
     "test:watch": "vitest",
     "lint": "eslint src/ && prettier --check src/ public/",
     "lint:fix": "eslint --fix src/ && prettier --write src/ public/",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@fastify/cors": "^11.2.0",
     "@fastify/static": "^9.0.0",
+    "drizzle-orm": "^0.45.1",
     "fastify": "^5.8.4",
+    "postgres": "^3.4.8",
     "ws": "^8.18.0",
     "zod": "^3.23.0"
   },
@@ -23,6 +28,7 @@
     "@eslint/js": "^9.0.0",
     "@types/node": "^22.0.0",
     "@types/ws": "^8.5.0",
+    "drizzle-kit": "^0.31.10",
     "eslint": "^9.0.0",
     "eslint-config-prettier": "^10.0.0",
     "prettier": "^3.5.0",

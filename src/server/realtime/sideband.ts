@@ -1,5 +1,11 @@
 import WebSocket from 'ws';
 
+export interface SidebandEvents {
+  readonly onAssistantMessage?: (text: string) => void;
+  readonly onUserMessage?: (text: string) => void;
+  readonly onToolCall?: (name: string, args: string, result: string) => void;
+}
+
 export interface Sideband {
   readonly callId: string;
   readonly close: () => void;
@@ -11,8 +17,14 @@ interface RealtimeEvent {
   call_id?: string;
   name?: string;
   arguments?: string;
+  transcript?: string;
   [key: string]: unknown;
 }
+
+export type ToolHandler = (
+  name: string,
+  args: Record<string, unknown>,
+) => Promise<Record<string, unknown>>;
 
 const sendToolResult = (ws: WebSocket, callId: string | undefined, output: string): void => {
   ws.send(
@@ -28,24 +40,23 @@ const sendToolResult = (ws: WebSocket, callId: string | undefined, output: strin
   ws.send(JSON.stringify({ type: 'response.create' }));
 };
 
-const handleToolCall = (ws: WebSocket, event: RealtimeEvent): void => {
-  if (event.name === 'echo') {
-    try {
-      const args = JSON.parse(event.arguments ?? '{}') as { text?: string };
-      sendToolResult(ws, event.call_id, JSON.stringify({ echoed: args.text ?? '' }));
-    } catch {
-      sendToolResult(
-        ws,
-        event.call_id,
-        JSON.stringify({ error: 'Failed to parse tool arguments' }),
-      );
-    }
-  } else {
-    sendToolResult(ws, event.call_id, JSON.stringify({ error: `Unknown tool: ${event.name}` }));
+const defaultToolHandler: ToolHandler = async (name, args) => {
+  if (name === 'echo') {
+    return { echoed: (args as { text?: string }).text ?? '' };
   }
+  return { error: `Unknown tool: ${name}` };
 };
 
-export const connectSideband = (callId: string, apiKey: string): Promise<Sideband> => {
+export interface ConnectSidebandOptions {
+  readonly callId: string;
+  readonly apiKey: string;
+  readonly events?: SidebandEvents;
+  readonly toolHandler?: ToolHandler;
+}
+
+export const connectSideband = (opts: ConnectSidebandOptions): Promise<Sideband> => {
+  const { callId, apiKey, events, toolHandler = defaultToolHandler } = opts;
+
   return new Promise((resolve, reject) => {
     const url = `wss://api.openai.com/v1/realtime?call_id=${encodeURIComponent(callId)}`;
     const ws = new WebSocket(url, {
@@ -83,7 +94,35 @@ export const connectSideband = (callId: string, apiKey: string): Promise<Sideban
         const event = JSON.parse(raw.toString()) as RealtimeEvent;
 
         if (event.type === 'response.function_call_arguments.done') {
-          handleToolCall(ws, event);
+          const name = event.name ?? 'unknown';
+          let parsedArgs: Record<string, unknown> = {};
+          try {
+            parsedArgs = JSON.parse(event.arguments ?? '{}') as Record<string, unknown>;
+          } catch {
+            /* invalid args */
+          }
+
+          toolHandler(name, parsedArgs)
+            .then((result) => {
+              const output = JSON.stringify(result);
+              sendToolResult(ws, event.call_id, output);
+              events?.onToolCall?.(name, event.arguments ?? '{}', output);
+            })
+            .catch(() => {
+              const errorOutput = JSON.stringify({ error: 'Tool execution failed' });
+              sendToolResult(ws, event.call_id, errorOutput);
+            });
+        }
+
+        if (event.type === 'response.audio_transcript.done' && event.transcript) {
+          events?.onAssistantMessage?.(event.transcript);
+        }
+
+        if (
+          event.type === 'conversation.item.input_audio_transcription.completed' &&
+          event.transcript
+        ) {
+          events?.onUserMessage?.(event.transcript);
         }
       } catch {
         // Ignore unparseable messages
