@@ -33,6 +33,7 @@
         border-radius: 999px;
         background: #1a1a1a;
         border: 1px solid #333;
+        transition: all 0.3s ease;
       }
       #status.status-ready {
         border-color: #2d7a2d;
@@ -41,18 +42,48 @@
       #status.status-listening {
         border-color: #d9534f;
         color: #ff6b6b;
+        animation: pulse 1.2s ease-in-out infinite;
       }
       #status.status-processing {
         border-color: #f0ad4e;
         color: #f0ad4e;
+        animation: pulse 1.5s ease-in-out infinite;
+      }
+      #status.status-working {
+        border-color: #9b59b6;
+        color: #bb86fc;
+        animation: pulse 1s ease-in-out infinite;
       }
       #status.status-speaking {
         border-color: #5bc0de;
         color: #5bc0de;
+        animation: glow 2s ease-in-out infinite;
       }
       #status.status-error {
         border-color: #d9534f;
         color: #d9534f;
+      }
+      #status.status-disconnected {
+        border-color: #d9534f;
+        color: #d9534f;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+      @keyframes glow {
+        0%,
+        100% {
+          box-shadow: 0 0 4px rgba(91, 192, 222, 0.2);
+        }
+        50% {
+          box-shadow: 0 0 12px rgba(91, 192, 222, 0.4);
+        }
       }
       #ptt {
         width: 120px;
@@ -82,6 +113,22 @@
         opacity: 0.4;
         cursor: not-allowed;
       }
+      #reconnect {
+        display: none;
+        margin-top: 1rem;
+        padding: 0.5rem 1.5rem;
+        border-radius: 6px;
+        border: 1px solid #d9534f;
+        background: transparent;
+        color: #d9534f;
+        font-size: 0.85rem;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+      #reconnect:hover {
+        background: #d9534f;
+        color: #fff;
+      }
       #transcript {
         margin-top: 2rem;
         max-width: 600px;
@@ -106,12 +153,17 @@
         color: #999;
         font-style: italic;
       }
+      .message[data-role='system'] {
+        color: #f0ad4e;
+        font-size: 0.8rem;
+      }
     </style>
   </head>
   <body>
     <h1>Jarvis</h1>
     <div id="status">Connecting...</div>
     <button id="ptt" disabled>Hold to Talk</button>
+    <button id="reconnect">Reconnect</button>
     <div id="transcript"></div>
     <script type="module" src="/app.js"></script>
   </body>

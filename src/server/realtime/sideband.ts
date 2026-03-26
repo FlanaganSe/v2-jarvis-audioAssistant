@@ -68,6 +68,7 @@ export const connectSideband = (opts: ConnectSidebandOptions): Promise<Sideband>
 
     const closeCallbacks: Array<() => void> = [];
     let resolved = false;
+    let keepalive: ReturnType<typeof setInterval> | null = null;
 
     const timeout = setTimeout(() => {
       if (!resolved) {
@@ -82,9 +83,18 @@ export const connectSideband = (opts: ConnectSidebandOptions): Promise<Sideband>
       resolved = true;
       clearTimeout(timeout);
 
+      keepalive = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.ping();
+        }
+      }, 25_000);
+
       resolve({
         callId,
-        close: () => ws.close(),
+        close: () => {
+          if (keepalive) clearInterval(keepalive);
+          ws.close();
+        },
         onClose: (cb) => closeCallbacks.push(cb),
       });
     });
@@ -130,6 +140,7 @@ export const connectSideband = (opts: ConnectSidebandOptions): Promise<Sideband>
     });
 
     ws.on('error', (err) => {
+      if (keepalive) clearInterval(keepalive);
       if (!resolved) {
         resolved = true;
         clearTimeout(timeout);
@@ -138,6 +149,7 @@ export const connectSideband = (opts: ConnectSidebandOptions): Promise<Sideband>
     });
 
     ws.on('close', () => {
+      if (keepalive) clearInterval(keepalive);
       closeCallbacks.forEach((cb) => cb());
     });
   });

@@ -1,13 +1,34 @@
-import { updateStatus, enablePTT, appendTranscript, finalizeTranscript } from './ui.js';
+import {
+  updateStatus,
+  enablePTT,
+  disablePTT,
+  onReconnect,
+  appendTranscript,
+  finalizeTranscript,
+} from './ui.js';
 
 let pc = null;
 let dc = null;
 let micTrack = null;
 let isSpeaking = false;
+let audioEl = null;
 
 async function init() {
   try {
     updateStatus('connecting');
+    disablePTT();
+
+    // Clean up previous connection if any
+    if (pc) {
+      pc.close();
+      pc = null;
+      dc = null;
+    }
+    if (audioEl) {
+      audioEl.srcObject = null;
+      audioEl.remove();
+      audioEl = null;
+    }
 
     // 1. Fetch ephemeral key from our server
     const sessionRes = await fetch('/api/session', { method: 'POST' });
@@ -20,7 +41,7 @@ async function init() {
     // 2. Set up peer connection
     pc = new RTCPeerConnection();
 
-    const audioEl = document.createElement('audio');
+    audioEl = document.createElement('audio');
     audioEl.autoplay = true;
     document.body.appendChild(audioEl);
 
@@ -28,17 +49,25 @@ async function init() {
       audioEl.srcObject = e.streams[0];
     };
 
-    // 3. Add microphone track (start muted)
+    // 3. Monitor connection state for disconnection
+    const localPc = pc;
+    localPc.onconnectionstatechange = () => {
+      if (localPc.connectionState === 'disconnected' || localPc.connectionState === 'failed') {
+        updateStatus('disconnected');
+      }
+    };
+
+    // 4. Add microphone track (start muted)
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     micTrack = stream.getAudioTracks()[0];
     micTrack.enabled = false;
     pc.addTrack(micTrack, stream);
 
-    // 4. Create data channel (must be named 'oai-events')
+    // 5. Create data channel (must be named 'oai-events')
     dc = pc.createDataChannel('oai-events');
     setupDataChannel(dc);
 
-    // 5. SDP offer → POST to OpenAI → get answer
+    // 6. SDP offer → POST to OpenAI → get answer
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
@@ -55,15 +84,15 @@ async function init() {
       throw new Error(`SDP exchange failed: ${sdpResponse.status}`);
     }
 
-    // 6. Extract call_id from Location header
+    // 7. Extract call_id from Location header
     const location = sdpResponse.headers.get('Location');
     const callId = location ? location.split('/').pop() : null;
 
-    // 7. Set remote description
+    // 8. Set remote description
     const answerSdp = await sdpResponse.text();
     await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
 
-    // 8. Connect sideband (server-side tool execution)
+    // 9. Connect sideband (server-side tool execution)
     if (callId) {
       const sbRes = await fetch('/api/session/sideband', {
         method: 'POST',
@@ -100,7 +129,7 @@ function setupDataChannel(channel) {
 
   channel.addEventListener('close', () => {
     console.log('Data channel closed');
-    updateStatus('error');
+    updateStatus('disconnected');
   });
 }
 
@@ -116,6 +145,10 @@ function handleServerEvent(event) {
 
     case 'response.audio_transcript.done':
       finalizeTranscript();
+      break;
+
+    case 'response.function_call_arguments.done':
+      updateStatus('working');
       break;
 
     case 'response.done':
@@ -163,7 +196,7 @@ function setupPTT() {
     updateStatus('processing');
   };
 
-  // Mouse events
+  // Pointer events
   btn.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     startTalking();
@@ -190,5 +223,10 @@ function setupPTT() {
     }
   });
 }
+
+// Wire up reconnect button
+onReconnect(() => {
+  init();
+});
 
 init();

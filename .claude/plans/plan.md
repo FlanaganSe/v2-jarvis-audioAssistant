@@ -124,6 +124,12 @@ Four milestones. M1 is the architecture validation gate — if it fails, we know
   - [x] Step 4 — Capabilities tool + system prompt + wire all tools + final tests → verify: `npm test && npm run lint && npm run typecheck`
         Commit: "feat: M3 tools + evidence"
 - [ ] **M4: Deploy + Polish + CI** — Railway deployment, client polish, GitHub Actions, evals
+  - [x] Step 1 — Client UI polish: CSS state animations (pulse/glow/spinner), error handling UI (reconnect on disconnect), working indicator for tool calls → verify: visual inspection + `npm run lint`
+  - [x] Step 2 — Production hardening: @fastify/rate-limit on API routes, WebSocket keepalive ping (25s) on sideband, tool error boundary improvements → verify: `npm run typecheck && npm test`
+  - [x] Step 3 — Dockerfile + .dockerignore: multi-stage Node 22 build for Railway → verify: `npm run typecheck`
+  - [x] Step 4 — GitHub Actions CI: .github/workflows/ci.yml (lint, typecheck, test, build on push/PR) → verify: valid YAML
+  - [x] Step 5 — Eval suite: install agent-eval-kit, eval.config.ts with refusal-accuracy + evidence-attachment suites, npm scripts, custom hasEvidence grader → verify: `npm test && npm run lint && npm run typecheck`
+        Commit: "feat: M4 deploy + polish + CI"
 
 ### 4. Milestone detail
 
@@ -249,7 +255,7 @@ project root
 - Refusal contract enforcement:
   - System prompt: "If you cannot ground your answer in evidence from tools, say you don't know"
   - Every tool result includes evidence or explicit null
-  - Eval script to test refusal on unsupported questions
+  - Eval suite to test refusal on unsupported questions (agent-eval-kit)
 - Audible working indicator:
   - If M1 spike showed model emits audio on tool call → use it
   - If not → add client-side audio cue (short tone) + system prompt instruction for Jarvis to announce ("Let me check...")
@@ -260,8 +266,9 @@ project root
 - Unit: URL parser (parameterized: repo, file, issue, PR, comment, invalid), weather response mapping, evidence creation, capabilities text
 - Integration: GitHub fetch → evidence → DB pipeline (mock GitHub API responses via MSW or similar)
 - Manual: ask about a real repo, ask for weather, ask unsupported question, verify refusal
-- Eval script: `scripts/eval-refusal.ts` — batch of unsupported questions, check for refusal rate
-- Eval script: `scripts/eval-evidence.ts` — batch of supported questions, check evidence attachment rate
+- Eval: `eval.config.ts` `refusal-accuracy` suite — batch of unsupported questions, graded with `toolNotCalled` + `llmClassify({ refused, answered })`
+- Eval: `eval.config.ts` `evidence-attachment` suite — batch of supported questions, graded with `toolCalled` + custom `hasEvidence` grader + `noHallucinatedNumbers`
+- Record initial fixtures: `npm run eval:record` (one-time, saves to `.eval-fixtures/` for zero-cost replay)
 
 #### M4: Deploy + Polish + CI
 
@@ -295,13 +302,18 @@ project root
   - Error boundaries (tool failures don't crash the session)
   - Rate limiting on public endpoints
 - End-to-end validation on Railway
-- Eval suite: recall, refusal, evidence — runnable via `npm run eval`
+- Eval suite (agent-eval-kit):
+  - `refusal-accuracy` and `evidence-attachment` suites created in M3
+  - Add `passRate` gates to suites for CI enforcement
+  - CI runs `npm run eval` in replay mode (zero API cost, grades committed fixtures)
+  - Recall correctness stays in Vitest integration tests (deterministic SQL assertions, not LLM quality)
 
 **Testing:**
 
 - CI runs all unit + integration tests on every push
 - Manual: full voice session on deployed Railway instance
-- Eval suite validates recall accuracy, refusal rate, evidence attachment rate
+- Eval suite validates refusal rate and evidence attachment rate (replay mode in CI, zero cost)
+- Recall accuracy validated by Vitest integration tests
 
 ### 5. Testing strategy
 
@@ -313,7 +325,7 @@ project root
 | Unit        | Config validation, URL parsing, evidence helpers, query builders, date logic | Vitest, pure functions, no mocks where possible              | Every milestone                     |
 | Integration | DB operations, tool→evidence→DB pipeline, session lifecycle                  | Vitest, real PostgreSQL (Docker or Railway dev DB)           | M2, M3, M4                          |
 | Spike       | Voice latency, interruption, sideband, working indicator                     | Manual with documented results → ADRs in `docs/decisions.md` | M1                                  |
-| Eval        | Recall accuracy, refusal rate, evidence rate                                 | Scripts in `scripts/eval-*.ts`, runnable via `npm run eval`  | M3, M4                              |
+| Eval        | Refusal rate, evidence attachment, number grounding                          | agent-eval-kit (`eval.config.ts`), replay mode in CI         | M3, M4                              |
 | E2E         | Full voice session with all features                                         | Manual on local + Railway                                    | M4                                  |
 | CI          | Lint + typecheck + unit + integration                                        | GitHub Actions                                               | M4 (runs on every push after setup) |
 
@@ -321,7 +333,8 @@ project root
 
 - `npm test` — unit tests
 - `npm run test:integration` — integration tests (requires PostgreSQL)
-- `npm run eval` — evaluation scripts (requires running server + API keys)
+- `npm run eval` — agent-eval-kit replay (grades committed fixtures, zero API cost)
+- `npm run eval:record` — agent-eval-kit live recording (requires running server + API keys, saves fixtures)
 - `npm run lint` — ESLint + Prettier check
 - `npm run typecheck` — `tsc --noEmit`
 
@@ -394,6 +407,10 @@ From research, verified 2026-03-26. Recheck at implementation time.
 **Dev:**
 
 - `vitest`, `eslint`, `prettier`, `tsx` (for dev server)
+
+**Eval:**
+
+- `agent-eval-kit` 0.1.x (pin exact) — record-replay eval framework; see `.claude/plans/research-agent-eval-kit.md`
 
 ### 11. Architecture diagram (text)
 

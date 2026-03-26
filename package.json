@@ -13,10 +13,13 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "eval": "agent-eval-kit run --mode replay",
+    "eval:record": "agent-eval-kit record"
   },
   "dependencies": {
     "@fastify/cors": "^11.2.0",
+    "@fastify/rate-limit": "^10.3.0",
     "@fastify/static": "^9.0.0",
     "@octokit/plugin-throttling": "^11.0.3",
     "@octokit/rest": "^22.0.1",
@@ -30,6 +33,7 @@
     "@eslint/js": "^9.0.0",
     "@types/node": "^22.0.0",
     "@types/ws": "^8.5.0",
+    "agent-eval-kit": "^0.1.0",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9.0.0",
     "eslint-config-prettier": "^10.0.0",

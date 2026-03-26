@@ -6,4 +6,5 @@ dist/
 .claude/agent-memory/
 *.log
 coverage/
+.eval-fixtures/
 .DS_Store
