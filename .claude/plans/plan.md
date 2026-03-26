@@ -110,14 +110,19 @@ Four milestones. M1 is the architecture validation gate — if it fails, we know
   - [x] Step 5 — Unit tests (config validation, session route with mocked fetch) → verify: `npm test && npm run lint && npm run typecheck`
         Commit: "feat: M1 foundation + voice spike"
         Note: Using Option C from research — raw WebRTC on browser, raw WS sideband on server. SDK deferred to M2.
-- [ ] **M2: Persistence + Memory** — Add durable storage, cross-session recall, and session rollover
-  - [ ] Step 1 — Install deps (drizzle-orm, postgres, drizzle-kit) + add DATABASE_URL to config + drizzle.config.ts + npm scripts → verify: `npm run typecheck`
-  - [ ] Step 2 — DB schema (sessions, turns, session_summaries, tool_calls, evidence_records) + connection module + generate initial migration → verify: `npm run typecheck`
-  - [ ] Step 3 — Session lifecycle + turn capture (create session on connect, persist turns from sideband, end on disconnect) → verify: `npm run typecheck && npm test`
-  - [ ] Step 4 — Summary generation (OpenAI text API after session end) + recall tool (SQL: recency, date, keyword via tsvector) + register in sideband → verify: `npm test && npm run lint && npm run typecheck`
+- [x] **M2: Persistence + Memory** — Add durable storage, cross-session recall, and session rollover
+  - [x] Step 1 — Install deps (drizzle-orm, postgres, drizzle-kit) + add DATABASE_URL to config + drizzle.config.ts + npm scripts → verify: `npm run typecheck`
+  - [x] Step 2 — DB schema (sessions, turns, session_summaries, tool_calls, evidence_records) + connection module + generate initial migration → verify: `npm run typecheck`
+  - [x] Step 3 — Session lifecycle + turn capture (create session on connect, persist turns from sideband, end on disconnect) → verify: `npm run typecheck && npm test`
+  - [x] Step 4 — Summary generation (OpenAI text API after session end) + recall tool (SQL: recency, date, keyword via tsvector) + register in sideband → verify: `npm test && npm run lint && npm run typecheck`
         Commit: "feat: M2 persistence + memory"
         Note: Session rollover runtime deferred to M3 per plan — schema supports it from M2.
-- [ ] **M3: Tools + Evidence** — Add GitHub, weather, capabilities, and the evidence/refusal contract
+- [x] **M3: Tools + Evidence** — Add GitHub, weather, capabilities, and the evidence/refusal contract
+  - [x] Step 1 — Evidence framework + GITHUB_TOKEN config + install Octokit deps → verify: `npm run typecheck`
+  - [x] Step 2 — Weather tool (Open-Meteo geocoding + forecast, evidence, tests) → verify: `npm test && npm run typecheck`
+  - [x] Step 3 — GitHub tool (URL parser, Octokit client, fetchers, evidence, tests) → verify: `npm test && npm run typecheck`
+  - [x] Step 4 — Capabilities tool + system prompt + wire all tools + final tests → verify: `npm test && npm run lint && npm run typecheck`
+        Commit: "feat: M3 tools + evidence"
 - [ ] **M4: Deploy + Polish + CI** — Railway deployment, client polish, GitHub Actions, evals
 
 ### 4. Milestone detail

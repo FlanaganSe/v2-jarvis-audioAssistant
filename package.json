@@ -18,6 +18,8 @@
   "dependencies": {
     "@fastify/cors": "^11.2.0",
     "@fastify/static": "^9.0.0",
+    "@octokit/plugin-throttling": "^11.0.3",
+    "@octokit/rest": "^22.0.1",
     "drizzle-orm": "^0.45.1",
     "fastify": "^5.8.4",
     "postgres": "^3.4.8",

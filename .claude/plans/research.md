@@ -854,3 +854,670 @@ The V1 connection pattern (`connectDb` / `getDb` / `disconnectDb` singleton with
 | `drizzle-orm` 0.45.1 API               | [drizzle-orm docs](https://orm.drizzle.team/docs/overview)             | `npm info drizzle-orm version` at install time | Low — 0.45.x is stable                          |
 | `drizzle-kit` migration journal format | `jarvis-audioAssistant/server/drizzle/meta/_journal.json` (v7 dialect) | Match format when generating V2 migrations     | Low                                             |
 | `postgres` (postgres.js) driver        | [postgres npm](https://www.npmjs.com/package/postgres)                 | `npm info postgres version` at install time    | Low                                             |
+
+---
+
+## 9. M3 External APIs — Open-Meteo + Octokit + GitHub URL Parsing
+
+Date: 2026-03-26
+Scope: Concrete, verified API shapes for the weather tool, GitHub tool, and URL parser planned for M3.
+
+---
+
+### 9.1 Current State
+
+M1 and M2 are complete. M3 needs three integrations:
+
+1. **Open-Meteo** — free weather API (geocoding + forecast), no API key required for non-commercial use
+2. **@octokit/rest** — GitHub REST client with throttling plugin
+3. **GitHub URL parser** — route-level regex to dispatch to the correct Octokit call
+
+No source files for any of these exist yet (`src/server/tools/` directory does not exist).
+
+---
+
+### 9.2 Constraints
+
+| Constraint                                                            | Source                         | Reason                                                                                                          |
+| --------------------------------------------------------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| Open-Meteo is free, no key required                                   | open-meteo.com/en/features     | Non-commercial use policy; key only needed for commercial/dedicated servers                                     |
+| File content `>1 MB` not available via `repos.getContent`             | GitHub REST docs               | API returns empty `content` field with `encoding: "none"` for 1–100 MB files; entirely unsupported above 100 MB |
+| `@octokit/rest` 22.0.1 — major version jump from v18/v19              | npm                            | v22 uses ESM-first, `octokit.rest.*` namespace (not `octokit.*` directly)                                       |
+| `@octokit/plugin-throttling` 11.0.3 requires `@octokit/core` peer dep | npm                            | Plugin works with `Octokit.plugin()` factory pattern, not standalone                                            |
+| TypeScript only, named exports, pure functions                        | `.claude/rules/conventions.md` | Project rules                                                                                                   |
+
+---
+
+### 9.3 Open-Meteo — Geocoding API
+
+**Base URL:** `https://geocoding-api.open-meteo.com/v1/search`
+
+**Query parameters:**
+
+| Parameter     | Type    | Required | Default | Notes                                       |
+| ------------- | ------- | -------- | ------- | ------------------------------------------- |
+| `name`        | string  | yes      | —       | City name. 2+ chars for exact, 3+ for fuzzy |
+| `count`       | integer | no       | 10      | Max 100 results                             |
+| `language`    | string  | no       | `en`    | ISO language code                           |
+| `format`      | string  | no       | `json`  | `json` or `protobuf`                        |
+| `countryCode` | string  | no       | —       | ISO-3166-1 alpha2 filter                    |
+
+**Response shape (TypeScript):**
+
+```ts
+interface GeocodingResult {
+  id: number;
+  name: string;
+  latitude: number;
+  longitude: number;
+  elevation: number;
+  feature_code: string; // e.g. "PPLC" = capital city
+  country_code: string; // ISO alpha2
+  country: string;
+  country_id: number;
+  timezone: string; // IANA tz string e.g. "Europe/London"
+  population: number;
+  postcodes?: string[];
+  admin1?: string;
+  admin1_id?: number;
+  admin2?: string;
+  admin2_id?: number;
+  admin3?: string;
+  admin3_id?: number;
+  admin4?: string;
+  admin4_id?: number;
+}
+
+interface GeocodingResponse {
+  results?: GeocodingResult[]; // absent (not empty array) when no match found
+  generationtime_ms?: number;
+}
+```
+
+**Example call:**
+
+```ts
+async function geocode(cityName: string): Promise<GeocodingResult | null> {
+  const url = new URL('https://geocoding-api.open-meteo.com/v1/search');
+  url.searchParams.set('name', cityName);
+  url.searchParams.set('count', '1');
+  url.searchParams.set('language', 'en');
+  url.searchParams.set('format', 'json');
+
+  const res = await fetch(url.toString());
+  if (!res.ok) throw new Error(`Geocoding failed: ${res.status}`);
+  const data: GeocodingResponse = await res.json();
+  return data.results?.[0] ?? null;
+}
+```
+
+**Key fact:** `results` is absent (not `[]`) when no city matches — always use `?.` access.
+
+Source: [Geocoding API | open-meteo.com](https://open-meteo.com/en/docs/geocoding-api)
+
+---
+
+### 9.4 Open-Meteo — Forecast API
+
+**Base URL:** `https://api.open-meteo.com/v1/forecast`
+
+**Required parameters:** `latitude`, `longitude`
+
+**Key optional parameters for current weather:**
+
+| Parameter          | Value for M3                                                      | Notes                                                    |
+| ------------------ | ----------------------------------------------------------------- | -------------------------------------------------------- |
+| `current`          | `temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m` | Comma-separated variable names                           |
+| `temperature_unit` | `celsius` (default) or `fahrenheit`                               |                                                          |
+| `wind_speed_unit`  | `kmh` (default), `mph`, `ms`, `kn`                                |                                                          |
+| `timezone`         | `auto`                                                            | Infer from coordinates — required for correct local time |
+
+**Response shape (TypeScript):**
+
+```ts
+interface ForecastCurrentUnits {
+  time: string;
+  temperature_2m: string; // e.g. "°C"
+  relative_humidity_2m: string; // e.g. "%"
+  weather_code: string; // e.g. "wmo code"
+  wind_speed_10m: string; // e.g. "km/h"
+}
+
+interface ForecastCurrent {
+  time: string; // ISO8601 local time, e.g. "2025-07-01T14:00"
+  temperature_2m: number;
+  relative_humidity_2m: number; // integer percent
+  weather_code: number; // WMO weather code (see table below)
+  wind_speed_10m: number;
+}
+
+interface ForecastResponse {
+  latitude: number;
+  longitude: number;
+  elevation: number;
+  generationtime_ms: number;
+  utc_offset_seconds: number;
+  timezone: string;
+  timezone_abbreviation: string;
+  current_units: ForecastCurrentUnits;
+  current: ForecastCurrent;
+}
+```
+
+**WMO weather code mapping (key codes for voice output):**
+
+```ts
+const WMO_DESCRIPTIONS: Record<number, string> = {
+  0: 'Clear sky',
+  1: 'Mainly clear',
+  2: 'Partly cloudy',
+  3: 'Overcast',
+  45: 'Foggy',
+  48: 'Icy fog',
+  51: 'Light drizzle',
+  53: 'Moderate drizzle',
+  55: 'Dense drizzle',
+  61: 'Slight rain',
+  63: 'Moderate rain',
+  65: 'Heavy rain',
+  71: 'Slight snow',
+  73: 'Moderate snow',
+  75: 'Heavy snow',
+  80: 'Slight showers',
+  81: 'Moderate showers',
+  82: 'Violent showers',
+  95: 'Thunderstorm',
+  96: 'Thunderstorm with hail',
+  99: 'Thunderstorm with heavy hail',
+};
+```
+
+**Example call:**
+
+```ts
+async function fetchForecast(lat: number, lon: number): Promise<ForecastResponse> {
+  const url = new URL('https://api.open-meteo.com/v1/forecast');
+  url.searchParams.set('latitude', String(lat));
+  url.searchParams.set('longitude', String(lon));
+  url.searchParams.set(
+    'current',
+    'temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m',
+  );
+  url.searchParams.set('timezone', 'auto');
+
+  const res = await fetch(url.toString());
+  if (!res.ok) throw new Error(`Forecast failed: ${res.status}`);
+  return res.json() as Promise<ForecastResponse>;
+}
+```
+
+**Rate limits:**
+
+- Free tier has no published numeric rate limit for non-commercial use.
+- A weighted-call system is in place (more days + variables = higher weight), but limits are "set at a reasonably high level" per maintainer guidance (GitHub issue #485).
+- Recommendation: cache geocoding results aggressively (city→lat/lon mappings change rarely). Cache forecast results with a 10-minute TTL — the API updates models every 1–6 hours depending on model, but current-conditions responses are stable within minutes.
+
+Source: [Forecast API docs | open-meteo.com](https://open-meteo.com/en/docs), [Rate limit discussion](https://github.com/open-meteo/open-meteo/issues/485)
+
+---
+
+### 9.5 @octokit/rest — Setup and Throttling
+
+**Versions (verified 2026-03-26):**
+
+- `@octokit/rest`: **22.0.1**
+- `@octokit/plugin-throttling`: **11.0.3**
+- `@octokit/plugin-paginate-rest`: **14.0.0** (plan.md:387)
+
+**Installation:**
+
+```bash
+npm install @octokit/rest@22.0.1 @octokit/plugin-throttling@11.0.3 @octokit/plugin-paginate-rest@14.0.0
+```
+
+**Setup with throttling:**
+
+```ts
+import { Octokit } from '@octokit/rest';
+import { throttling } from '@octokit/plugin-throttling';
+
+// Create a throttled Octokit subclass once (module-level singleton factory)
+const ThrottledOctokit = Octokit.plugin(throttling);
+
+export function createOctokit(token: string): InstanceType<typeof ThrottledOctokit> {
+  return new ThrottledOctokit({
+    auth: token,
+    throttle: {
+      onRateLimit: (retryAfter, options, octokit, retryCount) => {
+        octokit.log.warn(`Rate limit hit for ${options.method} ${options.url}`);
+        if (retryCount < 1) {
+          octokit.log.info(`Retrying after ${retryAfter}s`);
+          return true; // retry once
+        }
+      },
+      onSecondaryRateLimit: (retryAfter, options, octokit) => {
+        octokit.log.warn(`Secondary rate limit for ${options.method} ${options.url}`);
+        // do not retry secondary rate limits — return undefined (falsy)
+      },
+    },
+  });
+}
+```
+
+**Key fact:** Both `onRateLimit` and `onSecondaryRateLimit` handlers are required — the plugin will warn at construction if either is absent. Returning `true` from `onRateLimit` triggers automatic retry after `retryAfter` seconds.
+
+**Key fact:** The `throttle` block is typed in `@octokit/plugin-throttling`'s TypeScript types — no need to cast.
+
+**PAT rate limits:** 5,000 requests/hour for authenticated requests. Unauthenticated = 60/hour. Always pass the token.
+
+Source: [plugin-throttling.js README](https://github.com/octokit/plugin-throttling.js/blob/main/README.md), [@octokit/plugin-throttling npm](https://www.npmjs.com/package/@octokit/plugin-throttling)
+
+---
+
+### 9.6 Octokit API Calls and Response Shapes
+
+All methods live under `octokit.rest.*`. The response always has a `data` field containing the payload. HTTP status is in `status`.
+
+#### Get repo metadata
+
+```ts
+const { data } = await octokit.rest.repos.get({ owner, repo });
+```
+
+**Response shape (`data`):**
+
+```ts
+interface RepoMetadata {
+  id: number;
+  node_id: string;
+  name: string; // e.g. "my-repo"
+  full_name: string; // e.g. "owner/my-repo"
+  private: boolean;
+  owner: { login: string; id: number; avatar_url: string; html_url: string; type: string };
+  html_url: string;
+  description: string | null;
+  fork: boolean;
+  homepage: string | null;
+  language: string | null;
+  default_branch: string;
+  visibility: string; // "public" | "private" | "internal"
+  topics: string[];
+  stargazers_count: number;
+  watchers_count: number;
+  forks_count: number;
+  open_issues_count: number;
+  has_issues: boolean;
+  has_wiki: boolean;
+  archived: boolean;
+  created_at: string; // ISO8601
+  updated_at: string;
+  pushed_at: string | null;
+  size: number; // kilobytes
+}
+```
+
+Source: [GitHub REST docs — Get a repository](https://docs.github.com/en/rest/repos/repos?apiVersion=2022-11-28)
+
+#### Get repo README
+
+```ts
+const { data } = await octokit.rest.repos.getReadme({ owner, repo });
+// data.content is base64-encoded text
+const readme = Buffer.from(data.content, 'base64').toString('utf-8');
+```
+
+**Response shape (`data`):**
+
+```ts
+interface ContentFile {
+  type: 'file';
+  encoding: 'base64';
+  content: string; // base64-encoded file content
+  sha: string;
+  size: number; // bytes
+  name: string;
+  path: string;
+  html_url: string | null;
+  download_url: string | null;
+  url: string;
+  git_url: string | null;
+  _links: { git: string; html: string; self: string };
+}
+```
+
+**Size limit:** README files rarely exceed 1 MB, but apply the same guard as `getContent` below.
+
+#### Get file content
+
+```ts
+const { data } = await octokit.rest.repos.getContent({ owner, repo, path, ref });
+// data is ContentFile when path is a file, ContentFile[] when path is a directory
+```
+
+**Response shape for a file:** Same `ContentFile` interface as README above.
+
+**Content size handling:**
+
+```ts
+// MUST guard before decoding — large files return empty content
+function decodeFileContent(file: ContentFile, maxBytes = 1_000_000): string | null {
+  if (file.size > maxBytes) return null; // >1 MB: skip
+  if (file.encoding !== 'base64') return null; // "none" encoding = file too large
+  return Buffer.from(file.content, 'base64').toString('utf-8');
+}
+```
+
+| File size | `content` field | `encoding` field | Action                              |
+| --------- | --------------- | ---------------- | ----------------------------------- |
+| ≤ 1 MB    | base64 string   | `"base64"`       | Decode normally                     |
+| 1–100 MB  | empty string    | `"none"`         | Use `download_url` or Git Data API  |
+| > 100 MB  | —               | —                | Endpoint returns 403; not supported |
+
+Source: [GitHub REST docs — Repository contents](https://docs.github.com/en/rest/repos/contents?apiVersion=2022-11-28)
+
+#### Get an issue + comments
+
+```ts
+const { data: issue } = await octokit.rest.issues.get({ owner, repo, issue_number });
+const { data: comments } = await octokit.rest.issues.listComments({
+  owner,
+  repo,
+  issue_number,
+  per_page: 100,
+});
+```
+
+**Issue response shape (`data`):**
+
+```ts
+interface Issue {
+  id: number;
+  number: number;
+  title: string;
+  body: string | null;
+  state: 'open' | 'closed';
+  state_reason: 'completed' | 'reopened' | 'not_planned' | 'duplicate' | null;
+  user: { login: string; id: number; html_url: string } | null;
+  labels: Array<{ id: number; name: string; color: string; description: string | null }>;
+  assignees: Array<{ login: string; id: number }>;
+  created_at: string;
+  updated_at: string;
+  closed_at: string | null;
+  html_url: string;
+  pull_request?: {
+    // PRESENT only if this issue is actually a PR
+    diff_url: string;
+    html_url: string;
+    patch_url: string;
+    url: string;
+  };
+}
+```
+
+**IssueComment response shape (each element of `data` array):**
+
+```ts
+interface IssueComment {
+  id: number;
+  body: string | null;
+  user: { login: string; id: number; html_url: string } | null;
+  created_at: string;
+  updated_at: string;
+  html_url: string;
+}
+```
+
+**Key fact:** `issues.get` returns PRs too if you pass a PR number — the `pull_request` field distinguishes them. For a pure issue URL, `pull_request` will be absent.
+
+Source: [GitHub REST docs — Get an issue](https://docs.github.com/en/rest/issues/issues?apiVersion=2022-11-28)
+
+#### Get a PR + review comments
+
+```ts
+const { data: pr } = await octokit.rest.pulls.get({ owner, repo, pull_number });
+const { data: reviewComments } = await octokit.rest.pulls.listReviewComments({
+  owner,
+  repo,
+  pull_number,
+  per_page: 100,
+});
+// PR-level discussion comments (not inline) use issues.listComments with the same number
+const { data: issueComments } = await octokit.rest.issues.listComments({
+  owner,
+  repo,
+  issue_number: pull_number, // PR numbers and issue numbers share the same namespace
+  per_page: 100,
+});
+```
+
+**PR response shape (`data`):**
+
+```ts
+interface PullRequest {
+  id: number;
+  number: number;
+  title: string;
+  body: string | null;
+  state: 'open' | 'closed';
+  user: { login: string; id: number; html_url: string } | null;
+  head: { label: string; ref: string; sha: string; repo: object | null };
+  base: { label: string; ref: string; sha: string; repo: object };
+  merged: boolean;
+  merged_at: string | null;
+  html_url: string;
+  diff_url: string;
+  patch_url: string;
+  created_at: string;
+  updated_at: string;
+  closed_at: string | null;
+  draft: boolean;
+  comments: number; // count of issue-style comments
+  review_comments: number; // count of inline review comments
+  commits: number;
+  additions: number;
+  deletions: number;
+  changed_files: number;
+}
+```
+
+**Review comment response shape (each element of `data` array):**
+
+```ts
+interface ReviewComment {
+  id: number;
+  body: string;
+  path: string; // file path the comment is on
+  position: number | null; // line position in the diff
+  diff_hunk: string; // surrounding diff context
+  user: { login: string; id: number; html_url: string } | null;
+  created_at: string;
+  updated_at: string;
+  html_url: string;
+  in_reply_to_id?: number; // present if this is a reply
+  pull_request_review_id: number | null;
+}
+```
+
+Source: [GitHub REST docs — Pulls](https://docs.github.com/en/rest/pulls/pulls?apiVersion=2022-11-28), [GitHub REST docs — Pull request review comments](https://docs.github.com/en/rest/pulls/comments?apiVersion=2022-11-28)
+
+---
+
+### 9.7 GitHub URL Parser
+
+**URL patterns:**
+
+| Type          | Pattern                                                               | Example                                                               |
+| ------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Repo          | `https://github.com/{owner}/{repo}`                                   | `https://github.com/octokit/rest.js`                                  |
+| File          | `https://github.com/{owner}/{repo}/blob/{ref}/{path}`                 | `https://github.com/octokit/rest.js/blob/main/src/index.ts`           |
+| Issue         | `https://github.com/{owner}/{repo}/issues/{number}`                   | `https://github.com/octokit/rest.js/issues/42`                        |
+| PR            | `https://github.com/{owner}/{repo}/pull/{number}`                     | `https://github.com/octokit/rest.js/pull/7`                           |
+| Issue comment | `https://github.com/{owner}/{repo}/issues/{number}#issuecomment-{id}` | `https://github.com/octokit/rest.js/issues/42#issuecomment-123456789` |
+| PR comment    | `https://github.com/{owner}/{repo}/pull/{number}#issuecomment-{id}`   | `https://github.com/octokit/rest.js/pull/7#issuecomment-987654321`    |
+
+**Note:** PR discussion comments use `#issuecomment-{id}` (same as issues). Inline review comments use `#discussion_r{id}`. For MVP, parsing the URL to `pull_number` is sufficient — fetch the PR and both comment types.
+
+**TypeScript parser:**
+
+```ts
+export type GitHubUrlType =
+  | { kind: 'repo'; owner: string; repo: string }
+  | { kind: 'file'; owner: string; repo: string; ref: string; path: string }
+  | { kind: 'issue'; owner: string; repo: string; number: number }
+  | { kind: 'pr'; owner: string; repo: string; number: number }
+  | { kind: 'unknown' };
+
+export function parseGitHubUrl(rawUrl: string): GitHubUrlType {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return { kind: 'unknown' };
+  }
+
+  if (url.hostname !== 'github.com') return { kind: 'unknown' };
+
+  // Strip leading slash and split
+  const segments = url.pathname.replace(/^\//, '').split('/');
+  const [owner, repo, type, ...rest] = segments;
+
+  if (!owner || !repo) return { kind: 'unknown' };
+
+  if (!type) {
+    return { kind: 'repo', owner, repo };
+  }
+
+  if (type === 'blob' && rest.length >= 2) {
+    const ref = rest[0];
+    const path = rest.slice(1).join('/');
+    return { kind: 'file', owner, repo, ref, path };
+  }
+
+  if (type === 'issues' && rest[0] && /^\d+$/.test(rest[0])) {
+    return { kind: 'issue', owner, repo, number: parseInt(rest[0], 10) };
+  }
+
+  if (type === 'pull' && rest[0] && /^\d+$/.test(rest[0])) {
+    return { kind: 'pr', owner, repo, number: parseInt(rest[0], 10) };
+  }
+
+  return { kind: 'unknown' };
+}
+```
+
+**Test cases for `parseGitHubUrl` (parameterized Vitest table):**
+
+```ts
+describe('parseGitHubUrl', () => {
+  test.each([
+    [
+      'repo',
+      'https://github.com/octokit/rest.js',
+      { kind: 'repo', owner: 'octokit', repo: 'rest.js' },
+    ],
+    [
+      'file',
+      'https://github.com/octokit/rest.js/blob/main/src/index.ts',
+      { kind: 'file', owner: 'octokit', repo: 'rest.js', ref: 'main', path: 'src/index.ts' },
+    ],
+    [
+      'issue',
+      'https://github.com/octokit/rest.js/issues/42',
+      { kind: 'issue', owner: 'octokit', repo: 'rest.js', number: 42 },
+    ],
+    [
+      'pr',
+      'https://github.com/octokit/rest.js/pull/7',
+      { kind: 'pr', owner: 'octokit', repo: 'rest.js', number: 7 },
+    ],
+    [
+      'comment',
+      'https://github.com/octokit/rest.js/issues/42#issuecomment-123456789',
+      { kind: 'issue', owner: 'octokit', repo: 'rest.js', number: 42 },
+    ],
+    [
+      'pr-cmt',
+      'https://github.com/octokit/rest.js/pull/7#issuecomment-987654321',
+      { kind: 'pr', owner: 'octokit', repo: 'rest.js', number: 7 },
+    ],
+    ['invalid', 'https://example.com/foo', { kind: 'unknown' }],
+    ['bad-url', 'not a url', { kind: 'unknown' }],
+  ])('%s: parseGitHubUrl(%s)', (_label, url, expected) => {
+    expect(parseGitHubUrl(url)).toEqual(expected);
+  });
+});
+```
+
+**Key fact:** The URL hash (`#issuecomment-123456789`) is parsed by `new URL()` into `url.hash` — it does NOT appear in `url.pathname`. The parser above correctly ignores it, which means issue/PR comment URLs resolve to the parent issue or PR (the right behavior — fetch the issue/PR and all its comments).
+
+---
+
+### 9.8 Options (M3 Tool Architecture)
+
+#### Option A: Inline fetch in tool `execute` functions
+
+All fetch logic lives directly in each tool's `execute` callback. No abstraction layer.
+
+Pros: Simple, no indirection.
+Cons: Hard to unit-test (can't inject clients). Tool functions become large. Octokit instance creation mixed with business logic.
+
+#### Option B: Pure fetcher modules + thin tool wrappers
+
+`src/server/tools/github/fetchers.ts` — pure async functions accepting an Octokit instance.
+`src/server/tools/github/tool.ts` — calls fetchers, wraps result in Evidence, returns string.
+`src/server/tools/weather/fetchers.ts` — pure async functions for geocode + forecast.
+`src/server/tools/weather/tool.ts` — composes fetchers, evidence, return string.
+
+Pros: Fetchers are pure functions (easy to unit test with mocked/injected clients). Follows project conventions (pure function composition, modular code). Evidence creation is co-located with fetching.
+Cons: One more layer of indirection.
+
+#### Option C: Single `github.ts` and `weather.ts` modules (no sub-folders)
+
+Single file per tool, all logic inside. Still uses injected Octokit.
+
+Pros: Less file navigation for small codebases.
+Cons: Files grow large as edge cases accumulate (file size guards, pagination, evidence creation). Harder to test individual fetch operations in isolation.
+
+---
+
+### 9.9 Recommendation
+
+**Option B: Pure fetcher modules + thin tool wrappers.**
+
+Reasoning:
+
+- The URL parser is already a testable pure function — the fetcher pattern extends this naturally.
+- M3 eval scripts (`eval-evidence.ts`) need to verify evidence attachment rate. That's easier when fetchers return structured `{ data, evidence }` objects rather than side-effecting inside tools.
+- File size guarding and base64 decoding for `getContent` are non-trivial — isolating them in a `decodedContent` helper makes them independently testable.
+- Aligns with `.claude/rules/immutable.md` (pure function composition) and `.claude/rules/conventions.md` (small focused modules).
+
+**Proposed file structure for M3:**
+
+```
+src/server/tools/
+├── github/
+│   ├── client.ts          # createOctokit() factory — ThrottledOctokit setup
+│   ├── parser.ts          # parseGitHubUrl() pure function
+│   ├── fetchers.ts        # fetchRepo, fetchFile, fetchIssue, fetchPr — accept Octokit instance
+│   └── tool.ts            # RealtimeAgent tool() definition — composes parser + fetchers + evidence
+├── weather/
+│   ├── fetchers.ts        # geocode(), fetchForecast() — pure fetch functions
+│   └── tool.ts            # RealtimeAgent tool() definition — composes fetchers + evidence
+└── capabilities/
+    └── tool.ts            # Static capabilities description tool
+```
+
+---
+
+### 9.10 Sources of Truth
+
+| Area                                                      | Canonical Source                                                                                          | Verification Method                                                                                   | Drift Risk                                           |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Open-Meteo geocoding URL + params                         | [Geocoding API docs](https://open-meteo.com/en/docs/geocoding-api)                                        | Hit `https://geocoding-api.open-meteo.com/v1/search?name=London&count=1` and check `results[0]` shape | Low — free, stable, no versioned endpoint            |
+| Open-Meteo forecast URL + params                          | [Forecast API docs](https://open-meteo.com/en/docs)                                                       | Hit `https://api.open-meteo.com/v1/forecast?latitude=51.5&longitude=-0.1&current=temperature_2m`      | Low — stable                                         |
+| Open-Meteo WMO code table                                 | [WMO weather codes section of forecast docs](https://open-meteo.com/en/docs)                              | Cross-reference `weather_code` values from live response                                              | Low                                                  |
+| `@octokit/rest` version and method signatures             | [npm: @octokit/rest](https://www.npmjs.com/package/@octokit/rest)                                         | `npm info @octokit/rest version` at install time; confirmed 22.0.1                                    | Medium — major versions bump when GitHub API changes |
+| `@octokit/plugin-throttling` version and handler contract | [plugin-throttling README on GitHub](https://github.com/octokit/plugin-throttling.js/blob/main/README.md) | `npm info @octokit/plugin-throttling version`; confirmed 11.0.3                                       | Medium — major bumps with `@octokit/core` peer dep   |
+| GitHub REST content size limits                           | [GitHub REST docs — contents](https://docs.github.com/en/rest/repos/contents?apiVersion=2022-11-28)       | Check `encoding` field in response for files 1–100 MB                                                 | Low — documented hard limits                         |
+| GitHub URL path structure                                 | [GitHub.com URL conventions](https://github.com) — derived from observed URLs                             | Manual inspection of known repo/issue/PR URLs                                                         | Low — GitHub URL structure is extremely stable       |
+| `octokit.rest.issues.get` — `pull_request` field presence | [GitHub REST docs — issues](https://docs.github.com/en/rest/issues/issues?apiVersion=2022-11-28)          | Fetch a known PR via `issues.get` and verify `pull_request` field is present                          | Low — documented behavior                            |
