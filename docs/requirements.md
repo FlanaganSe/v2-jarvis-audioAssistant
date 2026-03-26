@@ -2,6 +2,7 @@
 
 Languages: Typescript. Optional: Swift, Python
 Deployment: Railway
+This is just a DEMO. Not a real app.
 
 Requirements: 
 - Focus: UX, being highly capable, low latency, and natural conversation
@@ -14,6 +15,9 @@ Additional:
 - Jarvis can communicate its capabilities/limitations
 - Never fabricate or hallucinate. Say "I don't know" if facts are expected
 - Can answer questions based on an API (pick one) 
+
+Preferable:
+- Github actions for CICD
 
 Bonus:
 - AWESOME: BUILD APP WITH SWIFT as well
