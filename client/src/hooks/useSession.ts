@@ -197,7 +197,7 @@ export function useSession(): UseSessionReturn {
 
       // Connect sideband for server-side tool execution
       if (callId) {
-        connectSideband(callId).catch(() => {
+        connectSideband(callId, ephemeralKey).catch(() => {
           console.warn('Sideband failed — tools will not work');
         });
       }

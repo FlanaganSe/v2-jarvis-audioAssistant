@@ -9,11 +9,11 @@ export const createSession = async (): Promise<{ ephemeralKey: string }> => {
   return res.json() as Promise<{ ephemeralKey: string }>;
 };
 
-export const connectSideband = async (callId: string): Promise<void> => {
+export const connectSideband = async (callId: string, ephemeralKey: string): Promise<void> => {
   const res = await fetch('/api/session/sideband', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ callId }),
+    body: JSON.stringify({ callId, ephemeralKey }),
   });
   if (!res.ok) {
     console.warn('Sideband connection failed — tools will not work');

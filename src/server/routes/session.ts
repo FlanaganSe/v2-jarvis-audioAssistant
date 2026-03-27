@@ -143,82 +143,93 @@ export const sessionRoutes = (config: Config, db?: Db): FastifyPluginAsync => {
       return { ephemeralKey: data.value };
     });
 
-    app.post<{ Body: { callId: string } }>('/session/sideband', async (req, reply) => {
-      const { callId } = req.body;
+    app.post<{ Body: { callId: string; ephemeralKey?: string } }>(
+      '/session/sideband',
+      async (req, reply) => {
+        const { callId, ephemeralKey } = req.body;
 
-      if (!callId || typeof callId !== 'string') {
-        return reply.status(400).send({ error: 'callId is required' });
-      }
-
-      if (activeSidebands.has(callId)) {
-        return { ok: true, message: 'Sideband already connected' };
-      }
-
-      let dbSessionId: string | null = null;
-
-      if (db) {
-        try {
-          const session = await createSession(db, { callId });
-          dbSessionId = session.id;
-        } catch (err) {
-          app.log.error({ err }, 'Failed to create DB session');
+        if (!callId || typeof callId !== 'string') {
+          return reply.status(400).send({ error: 'callId is required' });
         }
-      }
 
-      try {
-        const sideband = await connectSideband({
-          callId,
-          apiKey: config.OPENAI_API_KEY,
-          toolHandler,
-          log: app.log,
-          events:
-            db && dbSessionId
-              ? {
-                  onUserMessage: (text) => {
-                    insertTurn(db, dbSessionId!, 'user', text).catch((err) =>
-                      app.log.error({ err }, 'Failed to persist user turn'),
-                    );
-                  },
-                  onAssistantMessage: (text) => {
-                    insertTurn(db, dbSessionId!, 'assistant', text).catch((err) =>
-                      app.log.error({ err }, 'Failed to persist assistant turn'),
-                    );
-                  },
-                  onToolCall: (name, args, result) => {
-                    try {
-                      const parsedArgs = JSON.parse(args) as Record<string, unknown>;
-                      const parsedResult = JSON.parse(result) as Record<string, unknown>;
-                      insertToolCall(db, null, name, parsedArgs, parsedResult).catch((err) =>
-                        app.log.error({ err }, 'Failed to persist tool call'),
-                      );
-                    } catch (err) {
-                      app.log.error({ err }, 'Failed to parse tool call args/result');
-                    }
-                  },
-                }
-              : undefined,
-        });
-        activeSidebands.set(callId, sideband);
+        if (activeSidebands.has(callId)) {
+          return { ok: true, message: 'Sideband already connected' };
+        }
 
-        sideband.onClose(() => {
-          activeSidebands.delete(callId);
-          if (db && dbSessionId) {
-            endSession(db, dbSessionId)
-              .then(() => generateAndStoreSummary(db, dbSessionId!, config.OPENAI_API_KEY))
-              .catch((err) => app.log.error({ err }, 'Failed to end session or generate summary'));
+        let dbSessionId: string | null = null;
+
+        if (db) {
+          try {
+            const session = await createSession(db, { callId });
+            dbSessionId = session.id;
+          } catch (err) {
+            app.log.error({ err }, 'Failed to create DB session');
           }
-        });
-
-        return { ok: true };
-      } catch (err) {
-        if (db && dbSessionId) {
-          endSession(db, dbSessionId).catch((e) =>
-            app.log.error({ err: e }, 'Failed to clean up orphaned session'),
-          );
         }
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        return reply.status(502).send({ error: 'Failed to connect sideband', detail: message });
-      }
-    });
+
+        const sidebandKey =
+          typeof ephemeralKey === 'string' && ephemeralKey.length > 0
+            ? ephemeralKey
+            : config.OPENAI_API_KEY;
+
+        try {
+          const sideband = await connectSideband({
+            callId,
+            apiKey: sidebandKey,
+            toolHandler,
+            log: app.log,
+            events:
+              db && dbSessionId
+                ? {
+                    onUserMessage: (text) => {
+                      insertTurn(db, dbSessionId!, 'user', text).catch((err) =>
+                        app.log.error({ err }, 'Failed to persist user turn'),
+                      );
+                    },
+                    onAssistantMessage: (text) => {
+                      insertTurn(db, dbSessionId!, 'assistant', text).catch((err) =>
+                        app.log.error({ err }, 'Failed to persist assistant turn'),
+                      );
+                    },
+                    onToolCall: (name, args, result) => {
+                      try {
+                        const parsedArgs = JSON.parse(args) as Record<string, unknown>;
+                        const parsedResult = JSON.parse(result) as Record<string, unknown>;
+                        insertToolCall(db, null, name, parsedArgs, parsedResult).catch((err) =>
+                          app.log.error({ err }, 'Failed to persist tool call'),
+                        );
+                      } catch (err) {
+                        app.log.error({ err }, 'Failed to parse tool call args/result');
+                      }
+                    },
+                  }
+                : undefined,
+          });
+          activeSidebands.set(callId, sideband);
+
+          sideband.onClose(() => {
+            activeSidebands.delete(callId);
+            if (db && dbSessionId) {
+              endSession(db, dbSessionId)
+                // Ephemeral key is expired by session close; use long-lived key for summary
+                .then(() => generateAndStoreSummary(db, dbSessionId!, config.OPENAI_API_KEY))
+                .catch((err) =>
+                  app.log.error({ err }, 'Failed to end session or generate summary'),
+                );
+            }
+          });
+
+          return { ok: true };
+        } catch (err) {
+          if (db && dbSessionId) {
+            endSession(db, dbSessionId).catch((e) =>
+              app.log.error({ err: e }, 'Failed to clean up orphaned session'),
+            );
+          }
+          const message = err instanceof Error ? err.message : 'Unknown error';
+          return reply.status(502).send({ error: 'Failed to connect sideband', detail: message });
+        }
+      },
+    );
   };
 };
