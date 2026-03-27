@@ -1,0 +1,186 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "run-20260326-232833-0e93",
+  "suiteId": "evidence-attachment",
+  "mode": "live",
+  "trials": [
+    {
+      "caseId": "weather-london",
+      "status": "pass",
+      "output": {
+        "text": "The current temperature in London is 9.2°C. If you need more details, just let me know!",
+        "toolCalls": [
+          {
+            "name": "get_weather",
+            "args": {
+              "city": "London"
+            },
+            "result": {
+              "location": "London, United Kingdom",
+              "temperature": "9.2°C",
+              "evidence": {
+                "sourceType": "weather",
+                "sourceUrl": "https://open-meteo.com/",
+                "snippet": "Weather for London: 9.2°C"
+              }
+            }
+          }
+        ],
+        "latencyMs": 3249
+      },
+      "grades": [
+        {
+          "pass": true,
+          "score": 1,
+          "reason": "Tool \"get_weather\" was called",
+          "graderName": "toolCalled(get_weather)"
+        },
+        {
+          "pass": true,
+          "score": 1,
+          "reason": "All tool calls include evidence",
+          "graderName": "hasEvidence"
+        },
+        {
+          "pass": true,
+          "score": 1,
+          "reason": "All 1 numbers in output are grounded in tool results",
+          "graderName": "noHallucinatedNumbers",
+          "metadata": {
+            "hallucinated": [],
+            "checkedCount": 1
+          }
+        }
+      ],
+      "score": 1,
+      "durationMs": 3250
+    },
+    {
+      "caseId": "weather-sf",
+      "status": "pass",
+      "output": {
+        "text": "The current temperature in San Francisco is 21.6°C. If you need more details, just let me know!",
+        "toolCalls": [
+          {
+            "name": "get_weather",
+            "args": {
+              "city": "San Francisco"
+            },
+            "result": {
+              "location": "San Francisco, United States",
+              "temperature": "21.6°C",
+              "evidence": {
+                "sourceType": "weather",
+                "sourceUrl": "https://open-meteo.com/",
+                "snippet": "Weather for San Francisco: 21.6°C"
+              }
+            }
+          }
+        ],
+        "latencyMs": 2791
+      },
+      "grades": [
+        {
+          "pass": true,
+          "score": 1,
+          "reason": "Tool \"get_weather\" was called",
+          "graderName": "toolCalled(get_weather)"
+        },
+        {
+          "pass": true,
+          "score": 1,
+          "reason": "All tool calls include evidence",
+          "graderName": "hasEvidence"
+        },
+        {
+          "pass": true,
+          "score": 1,
+          "reason": "All 1 numbers in output are grounded in tool results",
+          "graderName": "noHallucinatedNumbers",
+          "metadata": {
+            "hallucinated": [],
+            "checkedCount": 1
+          }
+        }
+      ],
+      "score": 1,
+      "durationMs": 2794
+    },
+    {
+      "caseId": "weather-tokyo",
+      "status": "pass",
+      "output": {
+        "text": "The current temperature in Tokyo is 9.9°C.",
+        "toolCalls": [
+          {
+            "name": "get_weather",
+            "args": {
+              "city": "Tokyo"
+            },
+            "result": {
+              "location": "Tokyo, Japan",
+              "temperature": "9.9°C",
+              "evidence": {
+                "sourceType": "weather",
+                "sourceUrl": "https://open-meteo.com/",
+                "snippet": "Weather for Tokyo: 9.9°C"
+              }
+            }
+          }
+        ],
+        "latencyMs": 1662
+      },
+      "grades": [
+        {
+          "pass": true,
+          "score": 1,
+          "reason": "Tool \"get_weather\" was called",
+          "graderName": "toolCalled(get_weather)"
+        },
+        {
+          "pass": true,
+          "score": 1,
+          "reason": "All tool calls include evidence",
+          "graderName": "hasEvidence"
+        },
+        {
+          "pass": true,
+          "score": 1,
+          "reason": "All 1 numbers in output are grounded in tool results",
+          "graderName": "noHallucinatedNumbers",
+          "metadata": {
+            "hallucinated": [],
+            "checkedCount": 1
+          }
+        }
+      ],
+      "score": 1,
+      "durationMs": 1665
+    }
+  ],
+  "summary": {
+    "totalCases": 3,
+    "passed": 3,
+    "failed": 0,
+    "errors": 0,
+    "passRate": 1,
+    "totalCost": 0,
+    "totalDurationMs": 7709,
+    "p95LatencyMs": 3249,
+    "gateResult": {
+      "pass": true,
+      "results": [
+        {
+          "gate": "passRate",
+          "pass": true,
+          "actual": 1,
+          "threshold": 1,
+          "reason": "Pass rate 100.0% >= 100.0%"
+        }
+      ]
+    }
+  },
+  "timestamp": "2026-03-26T23:28:40.954Z",
+  "configHash": "0546335d6550a4b9",
+  "frameworkVersion": "0.1.0"
+}

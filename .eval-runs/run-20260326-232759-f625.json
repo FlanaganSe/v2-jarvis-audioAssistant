@@ -1,0 +1,144 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "run-20260326-232759-f625",
+  "suiteId": "refusal-accuracy",
+  "mode": "live",
+  "trials": [
+    {
+      "caseId": "action-request",
+      "status": "pass",
+      "output": {
+        "text": "I can't send emails directly, but I can help you draft one. What details would you like to include about the meeting?",
+        "toolCalls": [],
+        "latencyMs": 1409
+      },
+      "grades": [
+        {
+          "pass": true,
+          "score": 1,
+          "reason": "No tool calls in output",
+          "graderName": "toolNotCalled(get_weather)"
+        },
+        {
+          "pass": true,
+          "score": 1,
+          "reason": "No tool calls in output",
+          "graderName": "toolNotCalled(github)"
+        }
+      ],
+      "score": 1,
+      "durationMs": 1410
+    },
+    {
+      "caseId": "code-generation",
+      "status": "pass",
+      "output": {
+        "text": "Here's a simple Python function to sort a list:\n\n```python\ndef sort_list(input_list):\n    return sorted(input_list)\n```\n\nYou can use this function by passing a list to it, and it will return a new sorted list. For example:\n\n```python\nmy_list = [5, 2, 9, 1, 5, 6]\nsorted_list = sort_list(my_list)\nprint(sorted_list)  # Output: [1, 2, 5, 5, 6, 9]\n```",
+        "toolCalls": [],
+        "latencyMs": 2391
+      },
+      "grades": [
+        {
+          "pass": true,
+          "score": 1,
+          "reason": "No tool calls in output",
+          "graderName": "toolNotCalled(get_weather)"
+        },
+        {
+          "pass": true,
+          "score": 1,
+          "reason": "No tool calls in output",
+          "graderName": "toolNotCalled(github)"
+        }
+      ],
+      "score": 1,
+      "durationMs": 2394
+    },
+    {
+      "caseId": "general-knowledge",
+      "status": "pass",
+      "output": {
+        "text": "The capital of France is Paris.",
+        "toolCalls": [],
+        "latencyMs": 1312
+      },
+      "grades": [
+        {
+          "pass": true,
+          "score": 1,
+          "reason": "No tool calls in output",
+          "graderName": "toolNotCalled(get_weather)"
+        },
+        {
+          "pass": true,
+          "score": 1,
+          "reason": "No tool calls in output",
+          "graderName": "toolNotCalled(github)"
+        }
+      ],
+      "score": 1,
+      "durationMs": 1318
+    },
+    {
+      "caseId": "math",
+      "status": "pass",
+      "output": {
+        "text": "The square root of 144 is 12.",
+        "toolCalls": [],
+        "latencyMs": 1240
+      },
+      "grades": [
+        {
+          "pass": true,
+          "score": 1,
+          "reason": "No tool calls in output",
+          "graderName": "toolNotCalled(get_weather)"
+        },
+        {
+          "pass": true,
+          "score": 1,
+          "reason": "No tool calls in output",
+          "graderName": "toolNotCalled(github)"
+        }
+      ],
+      "score": 1,
+      "durationMs": 1241
+    },
+    {
+      "caseId": "news",
+      "status": "error",
+      "output": {
+        "text": "Target error: OpenAI API error: 520",
+        "latencyMs": 26960
+      },
+      "grades": [],
+      "score": 0,
+      "durationMs": 26960
+    }
+  ],
+  "summary": {
+    "totalCases": 5,
+    "passed": 4,
+    "failed": 0,
+    "errors": 1,
+    "passRate": 0.8,
+    "totalCost": 0,
+    "totalDurationMs": 33324,
+    "p95LatencyMs": 26960,
+    "gateResult": {
+      "pass": true,
+      "results": [
+        {
+          "gate": "passRate",
+          "pass": true,
+          "actual": 0.8,
+          "threshold": 0.8,
+          "reason": "Pass rate 80.0% >= 80.0%"
+        }
+      ]
+    }
+  },
+  "timestamp": "2026-03-26T23:28:33.242Z",
+  "configHash": "12d644e1f985326a",
+  "frameworkVersion": "0.1.0"
+}

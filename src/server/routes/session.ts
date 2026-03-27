@@ -118,12 +118,19 @@ export const sessionRoutes = (config: Config, db?: Db): FastifyPluginAsync => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-realtime-1.5',
-          voice: 'alloy',
-          instructions: systemPrompt,
-          tools,
-          turn_detection: null,
-          input_audio_transcription: { model: 'gpt-4o-mini-transcribe' },
+          session: {
+            type: 'realtime',
+            model: 'gpt-realtime-1.5',
+            instructions: systemPrompt,
+            tools,
+            audio: {
+              input: {
+                transcription: { model: 'gpt-4o-mini-transcribe' },
+                turn_detection: null,
+              },
+              output: { voice: 'alloy' },
+            },
+          },
         }),
       });
 

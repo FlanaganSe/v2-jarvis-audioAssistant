@@ -8,3 +8,8 @@ dist/
 coverage/
 .eval-fixtures/
 .DS_Store
+
+.mcp.json
+
+# Ignore eval runs; may unignore later
+.eval-runs
