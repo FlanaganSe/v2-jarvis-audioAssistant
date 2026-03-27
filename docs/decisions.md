@@ -11,10 +11,10 @@
 ### ADR-002: Push-to-talk default with VAD toggle
 
 **Date:** 2026-03-26
-**Status:** amended (2026-03-26)
+**Status:** amended (2026-03-27)
 **Context:** VAD adds complexity and false triggers. PTT is the reliable default, but hands-free mode is valuable for demos.
-**Decision:** PTT is the default input mode. A VAD toggle sends `session.update` with `semantic_vad` (eagerness: auto) over the data channel to switch mid-session. PTT uses the full GA sequence: `input_audio_buffer.clear` → `response.cancel` → `output_audio_buffer.clear` on push-down; `commit` + `response.create` on release.
-**Consequences:** Reliable PTT baseline with optional natural conversation mode. No reconnect needed to switch modes.
+**Decision:** PTT is the default input mode. A VAD toggle sends `session.update` with `semantic_vad` (eagerness: auto, interrupt_response: true, create_response: true) over the data channel to switch mid-session. PTT uses the full GA sequence: `input_audio_buffer.clear` → `response.cancel` → `output_audio_buffer.clear` on push-down; `commit` + `response.create` on release. In VAD mode, barge-in is handled by pausing the local `<audio>` element on `input_audio_buffer.speech_started` and letting the server auto-cancel via `interrupt_response: true`.
+**Consequences:** Reliable PTT baseline with natural hands-free conversation in VAD mode. No reconnect needed to switch modes.
 
 ### ADR-003: SQL-first memory retrieval (no vector search)
 

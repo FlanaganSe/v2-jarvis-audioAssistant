@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 interface PttButtonProps {
   readonly disabled: boolean;
@@ -7,6 +7,7 @@ interface PttButtonProps {
 }
 
 export function PttButton({ disabled, onStart, onStop }: PttButtonProps) {
+  const holdingRef = useRef(false);
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.code === 'Space' && !e.repeat && !disabled) {
@@ -42,13 +43,22 @@ export function PttButton({ disabled, onStart, onStop }: PttButtonProps) {
       disabled={disabled}
       onPointerDown={(e) => {
         e.preventDefault();
-        if (!disabled) onStart();
+        if (!disabled) {
+          holdingRef.current = true;
+          onStart();
+        }
       }}
       onPointerUp={(e) => {
         e.preventDefault();
+        holdingRef.current = false;
         onStop();
       }}
-      onPointerLeave={() => onStop()}
+      onPointerLeave={() => {
+        if (holdingRef.current) {
+          holdingRef.current = false;
+          onStop();
+        }
+      }}
     >
       Hold to Talk
     </button>

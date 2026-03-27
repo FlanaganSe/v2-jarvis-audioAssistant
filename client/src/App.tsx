@@ -79,7 +79,9 @@ export function App() {
 
       <VadToggle mode={vadMode} disabled={!isConnected} onChange={setVadMode} />
 
-      <Transcript entries={transcript} />
+      <div className="h-64 w-full max-w-xl">
+        <Transcript entries={transcript} />
+      </div>
     </div>
   );
 }
