@@ -241,9 +241,13 @@ Verification: Run in Simulator, confirm `POST /api/session` returns `{ ephemeral
 
 #### M2: WebRTC connection + audio + state machine
 
-`- [ ] M2: Voice connection — mic to OpenAI to speaker works`
+`- [x] M2: Voice connection — mic to OpenAI to speaker works`
 
-Write `WebRTCManager.swift` with full session lifecycle, data channel event handling, state machine, PTT start/stop. This is the highest-risk milestone.
+- [x] Step 1 — Write `WebRTCManager.swift` (~380 lines): AVAudioSession setup, factory, peer connection, audio track, data channel, SDP exchange, sideband, state machine, PTT, VAD, transcript, GitHub digest parsing
+- [x] Step 2 — Update `ContentView.swift` with temporary Connect button + PTT button wired to WebRTCManager
+- [x] Step 3 — Remove M1 verification code from `JarvisApp.swift`
+      Commit: "feat: add WebRTC voice connection with PTT and state machine (M2)"
+      Verify: Build in Xcode, run in Simulator, tap Connect → data channel opens → hold PTT → speak → release → hear Jarvis respond. Console shows DC events. Ask about weather to verify sideband.
 
 Depends on: **Manual setup task S3** (add WebRTC SPM package)
 
