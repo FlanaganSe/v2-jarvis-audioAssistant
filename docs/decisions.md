@@ -64,7 +64,15 @@
 **Decision:** CSS-only orb using `useAnalyser` hook (Web Audio `AnalyserNode` → RMS amplitude → `--amplitude` CSS custom property at 60fps via `requestAnimationFrame`). Glow via `::before` opacity (GPU-composited). No `setState` in rAF loop.
 **Consequences:** Zero new dependencies. 60fps animation without React re-renders. Cannot match ChatGPT's fluid shader effects, but sufficient for demo polish. Upgrade path to WebGL preserved.
 
-### ADR-009: OpenAI Realtime GA migration
+### ADR-009: Sideband auth uses ephemeral key, not standard API key
+
+**Date:** 2026-03-26
+**Status:** accepted
+**Context:** Sideband WebSocket to `wss://api.openai.com/v1/realtime?call_id=...` returned 404 when authenticated with the standard API key (`sk-proj-...`). M1 logging confirmed the error; OpenAI's sideband endpoint requires the session-scoped ephemeral key.
+**Decision:** Client sends `ephemeralKey` alongside `callId` in `POST /api/session/sideband`. Server uses it for the sideband WS `Authorization` header, falling back to `config.OPENAI_API_KEY` if absent. `generateAndStoreSummary` (called after session close) still uses the long-lived key since the ephemeral key expires after ~60s.
+**Consequences:** Sideband connects successfully. All server-side tools (weather, GitHub, recall, capabilities) now work. The ephemeral key transits the wire twice (server→client→server) but is already browser-resident from the SDP exchange, adding no real exposure.
+
+### ADR-010: OpenAI Realtime GA migration
 
 **Date:** 2026-03-26
 **Status:** accepted
