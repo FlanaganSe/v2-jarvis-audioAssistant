@@ -9,9 +9,11 @@ import { type Db } from '../db/index.js';
 import { sessionRoutes } from './routes/session.js';
 import { historyRoutes } from './routes/history.js';
 
-const resolveStaticRoot = (): string => {
-  const clientDist = join(process.cwd(), 'client', 'dist');
-  if (existsSync(clientDist)) return clientDist;
+const resolveStaticRoot = (nodeEnv: Config['NODE_ENV']): string => {
+  if (nodeEnv === 'production') {
+    const clientDist = join(process.cwd(), 'client', 'dist');
+    if (existsSync(clientDist)) return clientDist;
+  }
   return join(process.cwd(), 'public');
 };
 
@@ -26,7 +28,7 @@ export const buildApp = async (config: Config, db?: Db): Promise<ReturnType<type
     timeWindow: '1 minute',
   });
   await app.register(fastifyStatic, {
-    root: resolveStaticRoot(),
+    root: resolveStaticRoot(config.NODE_ENV),
   });
 
   app.get('/health', { config: { rateLimit: false } }, async () => ({ ok: true }));
