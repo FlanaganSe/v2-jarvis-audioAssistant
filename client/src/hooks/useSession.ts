@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { VoiceState } from '../types.ts';
+import type { VoiceState, GitHubDigest } from '../types.ts';
 import type { VadMode } from '../components/VadToggle.tsx';
 import { createSession, connectSideband } from '../api/session.ts';
 
@@ -9,6 +9,72 @@ export interface TranscriptEntry {
   readonly final: boolean;
   readonly toolName?: string;
 }
+
+const parseGitHubDigest = (output: string): GitHubDigest | null => {
+  try {
+    const raw = JSON.parse(output) as Record<string, unknown>;
+    const evidence = raw.evidence as Record<string, unknown> | undefined;
+    const sourceType = evidence?.sourceType as string | undefined;
+    const sourceUrl = (evidence?.sourceUrl as string) ?? null;
+
+    switch (sourceType) {
+      case 'github_repo':
+        return {
+          type: 'repo',
+          sourceUrl,
+          data: {
+            name: String(raw.name ?? ''),
+            description: typeof raw.description === 'string' ? raw.description : null,
+            language: typeof raw.language === 'string' ? raw.language : null,
+            stars: Number(raw.stars ?? 0),
+            forks: Number(raw.forks ?? 0),
+            openIssues: Number(raw.openIssues ?? 0),
+            topics: Array.isArray(raw.topics) ? (raw.topics as string[]) : [],
+          },
+        };
+      case 'github_issue':
+        return {
+          type: 'issue',
+          sourceUrl,
+          data: {
+            title: String(raw.title ?? ''),
+            state: String(raw.state ?? ''),
+            author: typeof raw.author === 'string' ? raw.author : null,
+            commentCount: Number(raw.commentCount ?? 0),
+            labels: Array.isArray(raw.labels) ? (raw.labels as string[]) : [],
+          },
+        };
+      case 'github_pull':
+        return {
+          type: 'pull',
+          sourceUrl,
+          data: {
+            title: String(raw.title ?? ''),
+            state: String(raw.state ?? ''),
+            merged: Boolean(raw.merged),
+            author: typeof raw.author === 'string' ? raw.author : null,
+            additions: Number(raw.additions ?? 0),
+            deletions: Number(raw.deletions ?? 0),
+            changedFiles: Number(raw.changedFiles ?? 0),
+            reviewCommentCount: Number(raw.reviewCommentCount ?? 0),
+          },
+        };
+      case 'github_file':
+        return {
+          type: 'file',
+          sourceUrl,
+          data: {
+            path: String(raw.path ?? ''),
+            size: Number(raw.size ?? 0),
+          },
+        };
+      default:
+        return null;
+    }
+  } catch {
+    return null;
+  }
+};
 
 const TOOL_LABELS: Readonly<Record<string, string>> = {
   recall: 'Searching memory',
@@ -22,6 +88,7 @@ export interface UseSessionReturn {
   readonly transcript: readonly TranscriptEntry[];
   readonly vadMode: VadMode;
   readonly rttMs: number | null;
+  readonly toolDigest: GitHubDigest | null;
   readonly connect: () => void;
   readonly disconnect: () => void;
   readonly startTalking: () => void;
@@ -38,6 +105,7 @@ export function useSession(): UseSessionReturn {
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [vadMode, setVadModeState] = useState<VadMode>('ptt');
   const [rttMs, setRttMs] = useState<number | null>(null);
+  const [toolDigest, setToolDigest] = useState<GitHubDigest | null>(null);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
@@ -94,6 +162,7 @@ export function useSession(): UseSessionReturn {
       transcript?: string;
       name?: string;
       session?: { turn_detection?: unknown };
+      item?: { type?: string; output?: string };
     }) => {
       switch (event.type) {
         case 'response.output_audio_transcript.delta':
@@ -149,6 +218,14 @@ export function useSession(): UseSessionReturn {
           }
           break;
 
+        case 'conversation.item.created': {
+          if (event.item?.type === 'function_call_output' && event.item.output) {
+            const digest = parseGitHubDigest(event.item.output);
+            if (digest) setToolDigest(digest);
+          }
+          break;
+        }
+
         case 'error':
           console.error('Realtime error:', event);
           break;
@@ -197,6 +274,7 @@ export function useSession(): UseSessionReturn {
     cancelledRef.current = false;
     setState('connecting');
     setTranscript([]);
+    setToolDigest(null);
 
     try {
       const { ephemeralKey } = await createSession();
@@ -402,6 +480,7 @@ export function useSession(): UseSessionReturn {
     transcript,
     vadMode,
     rttMs,
+    toolDigest,
     connect,
     disconnect,
     startTalking,

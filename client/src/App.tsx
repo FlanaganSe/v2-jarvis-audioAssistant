@@ -7,6 +7,7 @@ import { Orb } from './components/Orb.tsx';
 import { VadToggle } from './components/VadToggle.tsx';
 import { SessionSidebar } from './components/SessionSidebar.tsx';
 import { LatencyBadge } from './components/LatencyBadge.tsx';
+import { GitHubDigestPanel } from './components/GitHubDigestPanel.tsx';
 
 export function App() {
   const {
@@ -21,6 +22,7 @@ export function App() {
     micStream,
     remoteStream,
     rttMs,
+    toolDigest,
   } = useSession();
 
   const isConnected = state !== 'disconnected' && state !== 'error' && state !== 'connecting';
@@ -87,6 +89,8 @@ export function App() {
       <div className="h-64 w-full max-w-xl">
         <Transcript entries={transcript} />
       </div>
+
+      <GitHubDigestPanel digest={toolDigest} />
     </div>
   );
 }
