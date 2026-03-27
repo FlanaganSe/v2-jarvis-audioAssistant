@@ -62,7 +62,6 @@ export const connectSideband = (opts: ConnectSidebandOptions): Promise<Sideband>
     const ws = new WebSocket(url, {
       headers: {
         Authorization: `Bearer ${apiKey}`,
-        'OpenAI-Beta': 'realtime=v1',
       },
     });
 
@@ -124,7 +123,7 @@ export const connectSideband = (opts: ConnectSidebandOptions): Promise<Sideband>
             });
         }
 
-        if (event.type === 'response.audio_transcript.done' && event.transcript) {
+        if (event.type === 'response.output_audio_transcript.done' && event.transcript) {
           events?.onAssistantMessage?.(event.transcript);
         }
 

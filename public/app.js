@@ -135,7 +135,7 @@ function setupDataChannel(channel) {
 
 function handleServerEvent(event) {
   switch (event.type) {
-    case 'response.audio_transcript.delta':
+    case 'response.output_audio_transcript.delta':
       if (!isSpeaking) {
         isSpeaking = true;
         updateStatus('speaking');
@@ -143,7 +143,7 @@ function handleServerEvent(event) {
       appendTranscript(event.delta, 'assistant');
       break;
 
-    case 'response.audio_transcript.done':
+    case 'response.output_audio_transcript.done':
       finalizeTranscript();
       break;
 
@@ -170,11 +170,17 @@ function setupPTT() {
   const btn = document.getElementById('ptt');
 
   const startTalking = () => {
-    // Interrupt if Jarvis is speaking
-    if (isSpeaking && dc?.readyState === 'open') {
-      dc.send(JSON.stringify({ type: 'response.cancel' }));
-      isSpeaking = false;
-      finalizeTranscript();
+    if (dc?.readyState === 'open') {
+      // Purge stale audio from prior turn
+      dc.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
+
+      // Interrupt if Jarvis is speaking
+      if (isSpeaking) {
+        dc.send(JSON.stringify({ type: 'response.cancel' }));
+        dc.send(JSON.stringify({ type: 'output_audio_buffer.clear' }));
+        isSpeaking = false;
+        finalizeTranscript();
+      }
     }
 
     micTrack.enabled = true;
