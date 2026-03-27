@@ -83,6 +83,10 @@ export function useSession(): UseSessionReturn {
           if (!isSpeakingRef.current) {
             isSpeakingRef.current = true;
             setState('speaking');
+            audioElRef.current?.play().catch((err: unknown) => {
+              if (err instanceof DOMException && err.name === 'AbortError') return;
+              console.warn('Audio play failed:', err);
+            });
           }
           if (event.delta) appendTranscript(event.delta, 'assistant');
           break;
@@ -96,11 +100,17 @@ export function useSession(): UseSessionReturn {
           break;
 
         case 'response.done':
+        case 'response.cancelled':
           isSpeakingRef.current = false;
           setState('ready');
           break;
 
         case 'input_audio_buffer.speech_started':
+          audioElRef.current?.pause();
+          if (isSpeakingRef.current) {
+            isSpeakingRef.current = false;
+            finalizeTranscript();
+          }
           setState('listening');
           break;
 
@@ -265,7 +275,12 @@ export function useSession(): UseSessionReturn {
         JSON.stringify({
           type: 'session.update',
           session: {
-            turn_detection: { type: 'semantic_vad', eagerness: 'auto' },
+            turn_detection: {
+              type: 'semantic_vad',
+              eagerness: 'auto',
+              interrupt_response: true,
+              create_response: true,
+            },
           },
         }),
       );
