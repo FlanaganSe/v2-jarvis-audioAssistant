@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { type Config } from '../config.js';
 import { type Db } from '../db/index.js';
 import { sessionRoutes } from './routes/session.js';
+import { historyRoutes } from './routes/history.js';
 
 export const buildApp = async (config: Config, db?: Db): Promise<ReturnType<typeof Fastify>> => {
   const app = Fastify({ logger: config.NODE_ENV !== 'test' });
@@ -24,6 +25,7 @@ export const buildApp = async (config: Config, db?: Db): Promise<ReturnType<type
   app.get('/health', { config: { rateLimit: false } }, async () => ({ ok: true }));
 
   await app.register(sessionRoutes(config, db), { prefix: '/api' });
+  await app.register(historyRoutes(db), { prefix: '/api' });
 
   return app;
 };

@@ -72,6 +72,76 @@ export const insertSummary = async (
   return row.id;
 };
 
+export interface SessionListItem {
+  readonly id: string;
+  readonly startedAt: Date;
+  readonly endedAt: Date | null;
+  readonly topics: string[] | null;
+}
+
+export const listSessions = async (
+  db: Db,
+  limit: number = 20,
+): Promise<readonly SessionListItem[]> => {
+  const rows = await db
+    .select({
+      id: sessions.id,
+      startedAt: sessions.startedAt,
+      endedAt: sessions.endedAt,
+      topics: sessionSummaries.topics,
+    })
+    .from(sessions)
+    .leftJoin(sessionSummaries, eq(sessionSummaries.sessionId, sessions.id))
+    .orderBy(desc(sessions.startedAt))
+    .limit(limit);
+
+  return rows;
+};
+
+export interface SessionTurn {
+  readonly id: string;
+  readonly role: string;
+  readonly content: string;
+  readonly createdAt: Date;
+}
+
+export interface SessionDetail {
+  readonly id: string;
+  readonly startedAt: Date;
+  readonly endedAt: Date | null;
+  readonly turns: readonly SessionTurn[];
+}
+
+export const getSessionDetail = async (
+  db: Db,
+  sessionId: string,
+): Promise<SessionDetail | null> => {
+  const [session] = await db
+    .select({
+      id: sessions.id,
+      startedAt: sessions.startedAt,
+      endedAt: sessions.endedAt,
+    })
+    .from(sessions)
+    .where(eq(sessions.id, sessionId))
+    .limit(1);
+
+  if (!session) return null;
+
+  const sessionTurns = await db
+    .select({
+      id: turns.id,
+      role: turns.role,
+      content: turns.content,
+      createdAt: turns.createdAt,
+    })
+    .from(turns)
+    .where(eq(turns.sessionId, sessionId))
+    .orderBy(turns.createdAt);
+
+  return { ...session, turns: sessionTurns };
+};
+
 export interface RecallQuery {
   readonly keyword?: string;
   readonly afterDate?: Date;
