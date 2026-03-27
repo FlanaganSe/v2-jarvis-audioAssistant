@@ -17,6 +17,8 @@ const parseGitHubDigest = (output: string): GitHubDigest | null => {
     const sourceType = evidence?.sourceType as string | undefined;
     const sourceUrl = (evidence?.sourceUrl as string) ?? null;
 
+    if (typeof raw.error === 'string') return null;
+
     switch (sourceType) {
       case 'github_repo':
         return {
@@ -41,7 +43,9 @@ const parseGitHubDigest = (output: string): GitHubDigest | null => {
             state: String(raw.state ?? ''),
             author: typeof raw.author === 'string' ? raw.author : null,
             commentCount: Number(raw.commentCount ?? 0),
-            labels: Array.isArray(raw.labels) ? (raw.labels as string[]) : [],
+            labels: Array.isArray(raw.labels)
+              ? (raw.labels as unknown[]).filter((l): l is string => typeof l === 'string')
+              : [],
           },
         };
       case 'github_pull':
@@ -188,6 +192,7 @@ export function useSession(): UseSessionReturn {
             ...prev,
             { role: 'tool' as const, text: `${label}...`, toolName, final: true },
           ]);
+          if (toolName !== 'github') setToolDigest(null);
           setState('working');
           break;
         }
