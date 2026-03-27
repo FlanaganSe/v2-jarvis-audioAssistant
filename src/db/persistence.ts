@@ -105,11 +105,18 @@ export interface SessionTurn {
   readonly createdAt: Date;
 }
 
+export interface SessionSummaryData {
+  readonly topics: string[] | null;
+  readonly keyFacts: string[] | null;
+  readonly unresolved: string[] | null;
+}
+
 export interface SessionDetail {
   readonly id: string;
   readonly startedAt: Date;
   readonly endedAt: Date | null;
   readonly turns: readonly SessionTurn[];
+  readonly summary: SessionSummaryData | null;
 }
 
 export const getSessionDetail = async (
@@ -139,7 +146,25 @@ export const getSessionDetail = async (
     .where(eq(turns.sessionId, sessionId))
     .orderBy(turns.createdAt);
 
-  return { ...session, turns: sessionTurns };
+  const [summaryRow] = await db
+    .select({
+      topics: sessionSummaries.topics,
+      keyFacts: sessionSummaries.keyFacts,
+      unresolved: sessionSummaries.unresolved,
+    })
+    .from(sessionSummaries)
+    .where(eq(sessionSummaries.sessionId, sessionId))
+    .limit(1);
+
+  const summary: SessionSummaryData | null = summaryRow
+    ? {
+        topics: summaryRow.topics,
+        keyFacts: summaryRow.keyFacts,
+        unresolved: summaryRow.unresolved,
+      }
+    : null;
+
+  return { ...session, turns: sessionTurns, summary };
 };
 
 export interface RecallQuery {

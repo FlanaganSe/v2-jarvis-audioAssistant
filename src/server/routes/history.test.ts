@@ -89,6 +89,11 @@ describe('history routes with db', () => {
           createdAt: new Date('2026-03-26T10:00:02Z'),
         },
       ],
+      summary: {
+        topics: ['greetings'],
+        keyFacts: ['User said hello'],
+        unresolved: ['Nothing unresolved'],
+      },
     };
     vi.mocked(persistence.getSessionDetail).mockResolvedValue(mockDetail);
 
@@ -103,6 +108,28 @@ describe('history routes with db', () => {
     expect(body.id).toBe('1');
     expect(body.turns).toHaveLength(2);
     expect(body.turns[0].role).toBe('user');
+    expect(body.summary.keyFacts).toEqual(['User said hello']);
+  });
+
+  it('GET /api/sessions/:id/turns returns null summary when none exists', async () => {
+    const mockDetail = {
+      id: '2',
+      startedAt: new Date('2026-03-26T11:00:00Z'),
+      endedAt: null,
+      turns: [],
+      summary: null,
+    };
+    vi.mocked(persistence.getSessionDetail).mockResolvedValue(mockDetail);
+
+    const app = await buildApp(testConfig, mockDb as never);
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/sessions/2/turns',
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.summary).toBeNull();
   });
 
   it('GET /api/sessions/:id/turns returns 404 for unknown session', async () => {

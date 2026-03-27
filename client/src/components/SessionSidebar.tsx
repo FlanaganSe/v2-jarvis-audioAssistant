@@ -58,6 +58,39 @@ export function SessionSidebar() {
 
               {expanded === s.id && detail && (
                 <div className="mt-1 max-h-48 overflow-y-auto rounded bg-gray-800/50 p-2">
+                  {detail.summary &&
+                    (detail.summary.keyFacts?.length ?? 0) +
+                      (detail.summary.unresolved?.length ?? 0) >
+                      0 && (
+                      <div className="mb-2 border-b border-gray-700 pb-2">
+                        {detail.summary.keyFacts && detail.summary.keyFacts.length > 0 && (
+                          <div className="mb-1">
+                            <span className="text-xs font-semibold text-gray-400">Key facts</span>
+                            <ul className="ml-3 list-disc">
+                              {detail.summary.keyFacts.map((f, j) => (
+                                <li key={j} className="text-xs text-gray-400">
+                                  {f}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {detail.summary.unresolved && detail.summary.unresolved.length > 0 && (
+                          <div>
+                            <span className="text-xs font-semibold text-gray-400">
+                              Open questions
+                            </span>
+                            <ul className="ml-3 list-disc">
+                              {detail.summary.unresolved.map((q, j) => (
+                                <li key={j} className="text-xs text-gray-400">
+                                  {q}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   {detail.turns.map((t) => (
                     <div
                       key={t.id}
@@ -65,7 +98,9 @@ export function SessionSidebar() {
                         t.role === 'user' ? 'text-cyan-400' : 'text-gray-400'
                       }`}
                     >
-                      <span className="font-semibold">{t.role === 'user' ? 'You' : 'Jarvis'}:</span>{' '}
+                      <span className="font-semibold">
+                        {t.role === 'user' ? 'You' : 'Jarvis'}:
+                      </span>{' '}
                       {t.content}
                     </div>
                   ))}

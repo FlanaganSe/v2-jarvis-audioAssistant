@@ -22,9 +22,16 @@ export interface SessionSummary {
   readonly topics: string[] | null;
 }
 
+export interface SessionSummaryData {
+  readonly topics: string[] | null;
+  readonly keyFacts: string[] | null;
+  readonly unresolved: string[] | null;
+}
+
 export interface SessionDetail {
   readonly id: string;
   readonly startedAt: string;
   readonly endedAt: string | null;
   readonly turns: readonly Turn[];
+  readonly summary: SessionSummaryData | null;
 }
