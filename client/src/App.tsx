@@ -1,9 +1,11 @@
+import { useEffect, useRef } from 'react';
 import { useSession } from './hooks/useSession.ts';
 import { StatusBadge } from './components/StatusBadge.tsx';
 import { PttButton } from './components/PttButton.tsx';
 import { Transcript } from './components/Transcript.tsx';
 import { Orb } from './components/Orb.tsx';
 import { VadToggle } from './components/VadToggle.tsx';
+import { SessionSidebar } from './components/SessionSidebar.tsx';
 
 export function App() {
   const {
@@ -21,8 +23,32 @@ export function App() {
 
   const isConnected = state !== 'disconnected' && state !== 'error' && state !== 'connecting';
 
+  // Track whether the user has ever connected (for auto-reconnect on wake)
+  const hasConnectedRef = useRef(false);
+  useEffect(() => {
+    if (isConnected) hasConnectedRef.current = true;
+    if (state === 'disconnected') hasConnectedRef.current = false;
+  }, [isConnected, state]);
+
+  // Reconnect on sleep/wake via visibilitychange
+  useEffect(() => {
+    const handleVisibility = (): void => {
+      if (
+        document.visibilityState === 'visible' &&
+        state === 'disconnected' &&
+        hasConnectedRef.current
+      ) {
+        connect();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [state, connect]);
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-gray-950 p-4 text-gray-100">
+      <SessionSidebar />
+
       <h1 className="text-3xl font-semibold tracking-tight">Jarvis</h1>
 
       <Orb state={state} micStream={micStream} remoteStream={remoteStream} />
