@@ -4,13 +4,19 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --env-file=.env src/server/server.ts",
-    "build": "tsc",
+    "dev:client": "npm run dev --prefix client",
+    "dev:all": "concurrently \"npm run dev\" \"npm run dev:client\"",
+    "build:client": "npm run build --prefix client",
+    "build": "npm run build:client && tsc",
     "start": "node dist/server/server.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint src/ && prettier --check src/ public/",
     "lint:fix": "eslint --fix src/ && prettier --write src/ public/",
     "typecheck": "tsc --noEmit",
+    "typecheck:client": "npm run typecheck --prefix client",
+    "typecheck:all": "npm run typecheck && npm run typecheck:client",
+    "postinstall": "npm install --prefix client",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
@@ -41,6 +47,7 @@
     "tsx": "^4.0.0",
     "typescript": "^5.8.0",
     "typescript-eslint": "^8.0.0",
+    "concurrently": "^9.0.0",
     "vitest": "^3.0.0"
   }
 }
