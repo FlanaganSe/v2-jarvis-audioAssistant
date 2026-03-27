@@ -35,6 +35,7 @@ export function useSession(): UseSessionReturn {
   const audioElRef = useRef<HTMLAudioElement | null>(null);
   const isSpeakingRef = useRef(false);
   const cancelledRef = useRef(false);
+  const vadModeRef = useRef<VadMode>('ptt');
 
   const appendTranscript = useCallback((delta: string, role: 'user' | 'assistant') => {
     setTranscript((prev) => {
@@ -77,7 +78,12 @@ export function useSession(): UseSessionReturn {
   }, []);
 
   const handleServerEvent = useCallback(
-    (event: { type: string; delta?: string; transcript?: string }) => {
+    (event: {
+      type: string;
+      delta?: string;
+      transcript?: string;
+      session?: { turn_detection?: unknown };
+    }) => {
       switch (event.type) {
         case 'response.output_audio_transcript.delta':
           if (!isSpeakingRef.current) {
@@ -112,6 +118,17 @@ export function useSession(): UseSessionReturn {
             finalizeTranscript();
           }
           setState('listening');
+          break;
+
+        case 'session.updated':
+          console.log('[VAD] session.updated turn_detection:', event.session?.turn_detection);
+          break;
+
+        case 'input_audio_buffer.speech_stopped':
+          if (vadModeRef.current === 'vad') {
+            finalizeTranscript();
+            setState('processing');
+          }
           break;
 
         case 'error':
@@ -177,6 +194,27 @@ export function useSession(): UseSessionReturn {
         }
       });
 
+      dc.addEventListener('open', () => {
+        if (cancelledRef.current) return;
+        setState('ready');
+        if (vadModeRef.current === 'vad') {
+          dc.send(
+            JSON.stringify({
+              type: 'session.update',
+              session: {
+                turn_detection: {
+                  type: 'semantic_vad',
+                  eagerness: 'auto',
+                  interrupt_response: true,
+                  create_response: true,
+                },
+              },
+            }),
+          );
+          if (micTrackRef.current) micTrackRef.current.enabled = true;
+        }
+      });
+
       dc.addEventListener('close', () => {
         setState('disconnected');
       });
@@ -211,8 +249,6 @@ export function useSession(): UseSessionReturn {
           console.warn('Sideband failed — tools will not work');
         });
       }
-
-      setState('ready');
     } catch (err) {
       console.error('Connection failed:', err);
       setState('error');
@@ -265,6 +301,7 @@ export function useSession(): UseSessionReturn {
 
   const setVadMode = useCallback((mode: VadMode) => {
     setVadModeState(mode);
+    vadModeRef.current = mode;
     const dc = dcRef.current;
     const track = micTrackRef.current;
     if (!dc || dc.readyState !== 'open') return;
