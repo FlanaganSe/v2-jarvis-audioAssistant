@@ -47,15 +47,28 @@ const defaultToolHandler: ToolHandler = async (name, args) => {
   return { error: `Unknown tool: ${name}` };
 };
 
+export interface SidebandLog {
+  readonly info: (obj: Record<string, unknown>, msg: string) => void;
+  readonly warn: (obj: Record<string, unknown>, msg: string) => void;
+  readonly error: (obj: Record<string, unknown>, msg: string) => void;
+}
+
+const noopLog: SidebandLog = {
+  info: () => {},
+  warn: () => {},
+  error: () => {},
+};
+
 export interface ConnectSidebandOptions {
   readonly callId: string;
   readonly apiKey: string;
   readonly events?: SidebandEvents;
   readonly toolHandler?: ToolHandler;
+  readonly log?: SidebandLog;
 }
 
 export const connectSideband = (opts: ConnectSidebandOptions): Promise<Sideband> => {
-  const { callId, apiKey, events, toolHandler = defaultToolHandler } = opts;
+  const { callId, apiKey, events, toolHandler = defaultToolHandler, log = noopLog } = opts;
 
   return new Promise((resolve, reject) => {
     const url = `wss://api.openai.com/v1/realtime?call_id=${encodeURIComponent(callId)}`;
@@ -81,6 +94,7 @@ export const connectSideband = (opts: ConnectSidebandOptions): Promise<Sideband>
       if (resolved) return;
       resolved = true;
       clearTimeout(timeout);
+      log.info({ callId }, 'Sideband WebSocket connected');
 
       keepalive = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) {
@@ -111,13 +125,15 @@ export const connectSideband = (opts: ConnectSidebandOptions): Promise<Sideband>
             /* invalid args */
           }
 
+          log.info({ callId, tool: name }, 'Dispatching tool call');
           toolHandler(name, parsedArgs)
             .then((result) => {
               const output = JSON.stringify(result);
               sendToolResult(ws, event.call_id, output);
               events?.onToolCall?.(name, event.arguments ?? '{}', output);
             })
-            .catch(() => {
+            .catch((err: unknown) => {
+              log.error({ callId, tool: name, err }, 'Tool execution failed');
               const errorOutput = JSON.stringify({ error: 'Tool execution failed' });
               sendToolResult(ws, event.call_id, errorOutput);
             });
@@ -143,12 +159,16 @@ export const connectSideband = (opts: ConnectSidebandOptions): Promise<Sideband>
       if (!resolved) {
         resolved = true;
         clearTimeout(timeout);
+        log.error({ callId, err }, 'Sideband WebSocket connection failed');
         reject(err);
+      } else {
+        log.error({ callId, err }, 'Sideband WebSocket error after connect');
       }
     });
 
-    ws.on('close', () => {
+    ws.on('close', (code, reason) => {
       if (keepalive) clearInterval(keepalive);
+      log.info({ callId, code, reason: reason.toString() }, 'Sideband WebSocket closed');
       closeCallbacks.forEach((cb) => cb());
     });
   });

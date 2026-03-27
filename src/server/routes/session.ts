@@ -170,6 +170,7 @@ export const sessionRoutes = (config: Config, db?: Db): FastifyPluginAsync => {
           callId,
           apiKey: config.OPENAI_API_KEY,
           toolHandler,
+          log: app.log,
           events:
             db && dbSessionId
               ? {
