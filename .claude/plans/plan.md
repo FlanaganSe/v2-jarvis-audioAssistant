@@ -255,9 +255,13 @@ Verification: Run in Simulator → tap Connect → hold PTT → speak → releas
 
 #### M3: SwiftUI interface + polish
 
-`- [ ] M3: Demo-ready UI — transcript, status, PTT, VAD, history, GitHub digest`
+`- [x] M3: Demo-ready UI — transcript, status, PTT, VAD, history, GitHub digest`
 
-Build SwiftUI views (ContentView, TranscriptView, PttButton, StatusIndicator), wire to WebRTCManager. Add VAD toggle. Add session history (list + detail). Add styled GitHub digest card for tool results.
+- [x] Step 1 — Write StatusIndicator.swift, PttButton.swift, TranscriptView.swift
+- [x] Step 2 — Write GitHubDigestCard.swift, SessionHistoryView.swift
+- [x] Step 3 — Rewrite ContentView.swift with dark theme, all components wired, toolbar history
+      Commit: "feat: add polished SwiftUI demo UI with dark theme (M3)"
+      Verify: Build in Xcode, run in Simulator, full demo flow works
 
 Verification: Full demo flow — connect, talk, see transcript update, tools fire (weather shows in transcript, GitHub shows styled card), disconnect. Session history shows past sessions. App looks presentable on physical iPhone.
 
