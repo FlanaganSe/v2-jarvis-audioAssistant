@@ -156,6 +156,7 @@ export function useSession(): UseSessionReturn {
         default:
           console.debug('[DC unhandled]', event.type, event);
           break;
+      }
     },
     [appendTranscript, finalizeTranscript],
   );
