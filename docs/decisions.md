@@ -8,13 +8,13 @@
 **Decision:** Browser connects WebRTC directly to OpenAI for audio; server connects a raw WebSocket sideband to the same session for tool dispatch. No SDK — raw protocol on both sides.
 **Consequences:** Lowest latency for audio. Tools run server-side with full DB/API access. More manual protocol handling but fewer dependencies.
 
-### ADR-002: Push-to-talk with manual commit
+### ADR-002: Push-to-talk default with VAD toggle
 
 **Date:** 2026-03-26
-**Status:** accepted
-**Context:** VAD (voice activity detection) adds complexity and false triggers. MVP needs reliable input.
-**Decision:** Push-to-talk via pointer/space bar. `turn_detection: null` disables server-side VAD. Client sends `input_audio_buffer.commit` + `response.create` on release.
-**Consequences:** No accidental activations. User must hold button to speak. Simpler than VAD but less natural.
+**Status:** amended (2026-03-26)
+**Context:** VAD adds complexity and false triggers. PTT is the reliable default, but hands-free mode is valuable for demos.
+**Decision:** PTT is the default input mode. A VAD toggle sends `session.update` with `semantic_vad` (eagerness: auto) over the data channel to switch mid-session. PTT uses the full GA sequence: `input_audio_buffer.clear` → `response.cancel` → `output_audio_buffer.clear` on push-down; `commit` + `response.create` on release.
+**Consequences:** Reliable PTT baseline with optional natural conversation mode. No reconnect needed to switch modes.
 
 ### ADR-003: SQL-first memory retrieval (no vector search)
 
@@ -24,13 +24,13 @@
 **Decision:** Cross-session recall uses PostgreSQL full-text search (`tsvector`) + recency + date filtering. Schema designed so a vector column can be added as an additive migration later.
 **Consequences:** Works on any PostgreSQL instance. Good enough for keyword/date recall. Semantic similarity search deferred.
 
-### ADR-004: Single package (no monorepo)
+### ADR-004: Standalone client package (no workspaces)
 
 **Date:** 2026-03-26
-**Status:** accepted
-**Context:** V1 used pnpm workspaces (server/client/shared). V2 client is minimal static HTML/JS — no build step, no framework.
-**Decision:** Single `package.json`. Server in `src/`, client in `public/` served by `@fastify/static`.
-**Consequences:** Simpler tooling. No workspace overhead. Client changes don't need a build step.
+**Status:** amended (2026-03-26)
+**Context:** Frontend grew beyond static HTML/JS. React + Vite + Tailwind v4 needed for demo-quality UI. TypeScript configs for server (Node16) and client (bundler) must not cross-contaminate.
+**Decision:** `client/` has its own `package.json` and `tsconfig.json`. No npm workspaces — root scripts use `--prefix client`. `postinstall` auto-installs client deps. Fastify serves `client/dist/` in production via `@fastify/static`.
+**Consequences:** Full type isolation. Two `node_modules` (slightly more disk). Dev uses `concurrently` for parallel server + Vite. Single Railway service still serves everything.
 
 ### ADR-005: Hybrid eval strategy (agent-eval-kit + Vitest)
 
@@ -40,10 +40,34 @@
 **Decision:** Vitest for unit/integration tests (deterministic). `agent-eval-kit` for LLM behavioral evals with record-replay (zero-cost CI via committed fixtures). Two suites: `refusal-accuracy` and `evidence-attachment`.
 **Consequences:** CI runs evals at zero API cost (replay mode). Recording fixtures requires a live server + API keys. Two eval systems to maintain.
 
-### ADR-006: Multi-stage Docker build for Railway
+### ADR-006: Three-stage Docker build for Railway
+
+**Date:** 2026-03-26
+**Status:** amended (2026-03-26)
+**Context:** React client added in `client/`. Need to build both client and server, keep production image minimal.
+**Decision:** Three-stage Dockerfile: `client-builder` (npm ci + vite build), `builder` (npm ci + tsc), runtime (prod deps + `dist/` + `client/dist/` + `drizzle/`). Each stage caches independently.
+**Consequences:** Client and server build in parallel layers. Production image serves React from `client/dist/` via `@fastify/static` with SPA catch-all. `public/` no longer copied to production.
+
+### ADR-007: React + Vite + Tailwind v4 frontend
 
 **Date:** 2026-03-26
 **Status:** accepted
-**Context:** Railway needs a deployable container. TypeScript must be compiled. Production image should be minimal.
-**Decision:** Two-stage Dockerfile: builder stage compiles TS with full devDependencies, production stage copies `dist/` + `public/` + `drizzle/` with prod-only deps on Node 22 Alpine.
-**Consequences:** Small production image. Drizzle migrations included for `db:migrate` on deploy. `NODE_ENV=production` set in image.
+**Context:** Demo needs visual polish (audio-reactive orb, session sidebar, transcript, VAD toggle) beyond what vanilla JS in `public/` can sustain. Research compared embedded static client vs React.
+**Decision:** React 19 + Vite + Tailwind CSS v4 in `client/`. Tailwind v4 uses `@tailwindcss/vite` plugin (no config file). Vite proxies `/api` to Fastify in dev.
+**Consequences:** Component model for UI complexity. Type-safe JSX. Tailwind utilities for rapid layout. ~200 KB JS bundle (acceptable for demo).
+
+### ADR-008: CSS orb with Web Audio API amplitude (no WebGL)
+
+**Date:** 2026-03-26
+**Status:** accepted
+**Context:** Audio-reactive orb is the highest-impact visual element. Options: CSS-only, Three.js/WebGL, or pre-built package.
+**Decision:** CSS-only orb using `useAnalyser` hook (Web Audio `AnalyserNode` → RMS amplitude → `--amplitude` CSS custom property at 60fps via `requestAnimationFrame`). Glow via `::before` opacity (GPU-composited). No `setState` in rAF loop.
+**Consequences:** Zero new dependencies. 60fps animation without React re-renders. Cannot match ChatGPT's fluid shader effects, but sufficient for demo polish. Upgrade path to WebGL preserved.
+
+### ADR-009: OpenAI Realtime GA migration
+
+**Date:** 2026-03-26
+**Status:** accepted
+**Context:** OpenAI Realtime API beta events deprecated April 30, 2026. Codebase used 3 deprecated event names and a deprecated header.
+**Decision:** Migrated all event names to GA (`response.output_audio_transcript.delta/done`). Removed `OpenAI-Beta: realtime=v1` header. Added `input_audio_buffer.clear` + `output_audio_buffer.clear` to PTT sequence per GA docs.
+**Consequences:** Protocol-compliant before deadline. PTT no longer bleeds stale audio on interrupt.
