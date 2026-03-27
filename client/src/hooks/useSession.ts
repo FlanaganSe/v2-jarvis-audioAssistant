@@ -203,11 +203,15 @@ export function useSession(): UseSessionReturn {
               type: 'session.update',
               session: {
                 type: 'realtime',
-                turn_detection: {
-                  type: 'semantic_vad',
-                  eagerness: 'auto',
-                  interrupt_response: true,
-                  create_response: true,
+                audio: {
+                  input: {
+                    turn_detection: {
+                      type: 'semantic_vad',
+                      eagerness: 'auto',
+                      interrupt_response: true,
+                      create_response: true,
+                    },
+                  },
                 },
               },
             }),
@@ -314,11 +318,15 @@ export function useSession(): UseSessionReturn {
           type: 'session.update',
           session: {
             type: 'realtime',
-            turn_detection: {
-              type: 'semantic_vad',
-              eagerness: 'auto',
-              interrupt_response: true,
-              create_response: true,
+            audio: {
+              input: {
+                turn_detection: {
+                  type: 'semantic_vad',
+                  eagerness: 'auto',
+                  interrupt_response: true,
+                  create_response: true,
+                },
+              },
             },
           },
         }),
@@ -329,7 +337,7 @@ export function useSession(): UseSessionReturn {
       dc.send(
         JSON.stringify({
           type: 'session.update',
-          session: { type: 'realtime', turn_detection: null },
+          session: { type: 'realtime', audio: { input: { turn_detection: null } } },
         }),
       );
       if (track) track.enabled = false;
