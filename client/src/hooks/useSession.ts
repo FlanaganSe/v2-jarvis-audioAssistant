@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import type { VoiceState } from '../types.ts';
+import type { VadMode } from '../components/VadToggle.tsx';
 import { createSession, connectSideband } from '../api/session.ts';
 
 export interface TranscriptEntry {
@@ -11,10 +12,12 @@ export interface TranscriptEntry {
 export interface UseSessionReturn {
   readonly state: VoiceState;
   readonly transcript: readonly TranscriptEntry[];
+  readonly vadMode: VadMode;
   readonly connect: () => void;
   readonly disconnect: () => void;
   readonly startTalking: () => void;
   readonly stopTalking: () => void;
+  readonly setVadMode: (mode: VadMode) => void;
   readonly micStream: MediaStream | null;
   readonly remoteStream: MediaStream | null;
 }
@@ -24,6 +27,7 @@ export function useSession(): UseSessionReturn {
   const [transcript, setTranscript] = useState<readonly TranscriptEntry[]>([]);
   const [micStream, setMicStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [vadMode, setVadModeState] = useState<VadMode>('ptt');
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
@@ -249,13 +253,44 @@ export function useSession(): UseSessionReturn {
     setState('processing');
   }, [finalizeTranscript]);
 
+  const setVadMode = useCallback((mode: VadMode) => {
+    setVadModeState(mode);
+    const dc = dcRef.current;
+    const track = micTrackRef.current;
+    if (!dc || dc.readyState !== 'open') return;
+
+    if (mode === 'vad') {
+      // Enable VAD: turn on mic, send session.update with semantic_vad
+      dc.send(
+        JSON.stringify({
+          type: 'session.update',
+          session: {
+            turn_detection: { type: 'semantic_vad', eagerness: 'auto' },
+          },
+        }),
+      );
+      if (track) track.enabled = true;
+    } else {
+      // Disable VAD: turn off mic, send session.update with null turn_detection
+      dc.send(
+        JSON.stringify({
+          type: 'session.update',
+          session: { turn_detection: null },
+        }),
+      );
+      if (track) track.enabled = false;
+    }
+  }, []);
+
   return {
     state,
     transcript,
+    vadMode,
     connect,
     disconnect,
     startTalking,
     stopTalking,
+    setVadMode,
     micStream,
     remoteStream,
   };

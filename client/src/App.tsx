@@ -3,15 +3,18 @@ import { StatusBadge } from './components/StatusBadge.tsx';
 import { PttButton } from './components/PttButton.tsx';
 import { Transcript } from './components/Transcript.tsx';
 import { Orb } from './components/Orb.tsx';
+import { VadToggle } from './components/VadToggle.tsx';
 
 export function App() {
   const {
     state,
     transcript,
+    vadMode,
     connect,
     disconnect,
     startTalking,
     stopTalking,
+    setVadMode,
     micStream,
     remoteStream,
   } = useSession();
@@ -44,7 +47,11 @@ export function App() {
         )}
       </div>
 
-      <PttButton disabled={!isConnected} onStart={startTalking} onStop={stopTalking} />
+      {vadMode === 'ptt' && (
+        <PttButton disabled={!isConnected} onStart={startTalking} onStop={stopTalking} />
+      )}
+
+      <VadToggle mode={vadMode} disabled={!isConnected} onChange={setVadMode} />
 
       <Transcript entries={transcript} />
     </div>
