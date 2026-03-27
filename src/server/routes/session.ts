@@ -51,6 +51,21 @@ const buildToolDefs = (hasGitHub: boolean) => [
   CAPABILITIES_TOOL_DEF,
 ];
 
+const buildSystemPrompt = (base: string): string => {
+  const now = new Date();
+  const dateTime = now.toLocaleString('en-US', {
+    timeZone: 'UTC',
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  });
+  return `Current date and time: ${dateTime}\n\n${base}`;
+};
+
 const activeSidebands = new Map<string, Sideband>();
 
 type LogFn = (obj: Record<string, unknown>, msg: string) => void;
@@ -105,7 +120,7 @@ const buildToolHandler = (
 export const sessionRoutes = (config: Config, db?: Db): FastifyPluginAsync => {
   const octokit = config.GITHUB_TOKEN ? createOctokitClient(config.GITHUB_TOKEN) : null;
   const hasFullTools = !!db;
-  const systemPrompt = hasFullTools ? SYSTEM_PROMPT : BASE_SYSTEM_PROMPT;
+  const basePrompt = hasFullTools ? SYSTEM_PROMPT : BASE_SYSTEM_PROMPT;
   const tools = hasFullTools ? buildToolDefs(!!octokit) : [ECHO_TOOL_DEF];
 
   return async (app) => {
@@ -121,7 +136,7 @@ export const sessionRoutes = (config: Config, db?: Db): FastifyPluginAsync => {
           session: {
             type: 'realtime',
             model: 'gpt-realtime-1.5',
-            instructions: systemPrompt,
+            instructions: buildSystemPrompt(basePrompt),
             tools,
             audio: {
               input: {

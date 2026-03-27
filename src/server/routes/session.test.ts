@@ -47,6 +47,27 @@ describe('POST /api/session', () => {
     );
   });
 
+  it('injects current date into system prompt', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ value: 'ek_test_123' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const app = await buildApp(testConfig);
+    await app.inject({ method: 'POST', url: '/api/session' });
+
+    const [, options] = vi.mocked(globalThis.fetch).mock.calls[0];
+    const body = JSON.parse((options as RequestInit).body as string) as {
+      session: { instructions: string };
+    };
+    const now = new Date();
+    const expectedYear = now.getFullYear().toString();
+    expect(body.session.instructions).toContain('Current date and time:');
+    expect(body.session.instructions).toContain(expectedYear);
+  });
+
   it('returns 502 when OpenAI API fails', async () => {
     vi.mocked(globalThis.fetch).mockResolvedValueOnce(
       new Response('Unauthorized', { status: 401 }),
