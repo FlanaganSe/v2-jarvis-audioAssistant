@@ -152,7 +152,10 @@ export function useSession(): UseSessionReturn {
         case 'error':
           console.error('Realtime error:', event);
           break;
-      }
+
+        default:
+          console.debug('[DC unhandled]', event.type, event);
+          break;
     },
     [appendTranscript, finalizeTranscript],
   );
