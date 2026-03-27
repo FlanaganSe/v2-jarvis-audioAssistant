@@ -4,10 +4,18 @@ import type { VadMode } from '../components/VadToggle.tsx';
 import { createSession, connectSideband } from '../api/session.ts';
 
 export interface TranscriptEntry {
-  readonly role: 'user' | 'assistant';
+  readonly role: 'user' | 'assistant' | 'tool';
   readonly text: string;
   readonly final: boolean;
+  readonly toolName?: string;
 }
+
+const TOOL_LABELS: Readonly<Record<string, string>> = {
+  recall: 'Searching memory',
+  get_weather: 'Checking weather',
+  github: 'Looking up GitHub',
+  capabilities: 'Checking capabilities',
+};
 
 export interface UseSessionReturn {
   readonly state: VoiceState;
@@ -82,6 +90,7 @@ export function useSession(): UseSessionReturn {
       type: string;
       delta?: string;
       transcript?: string;
+      name?: string;
       session?: { turn_detection?: unknown };
     }) => {
       switch (event.type) {
@@ -101,9 +110,16 @@ export function useSession(): UseSessionReturn {
           finalizeTranscript();
           break;
 
-        case 'response.function_call_arguments.done':
+        case 'response.function_call_arguments.done': {
+          const toolName = event.name ?? 'unknown';
+          const label = TOOL_LABELS[toolName] ?? toolName;
+          setTranscript((prev) => [
+            ...prev,
+            { role: 'tool' as const, text: `${label}...`, toolName, final: true },
+          ]);
           setState('working');
           break;
+        }
 
         case 'response.done':
         case 'response.cancelled':
