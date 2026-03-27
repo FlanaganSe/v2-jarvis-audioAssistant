@@ -6,6 +6,7 @@ import { Transcript } from './components/Transcript.tsx';
 import { Orb } from './components/Orb.tsx';
 import { VadToggle } from './components/VadToggle.tsx';
 import { SessionSidebar } from './components/SessionSidebar.tsx';
+import { LatencyBadge } from './components/LatencyBadge.tsx';
 
 export function App() {
   const {
@@ -19,6 +20,7 @@ export function App() {
     setVadMode,
     micStream,
     remoteStream,
+    rttMs,
   } = useSession();
 
   const isConnected = state !== 'disconnected' && state !== 'error' && state !== 'connecting';
@@ -53,7 +55,10 @@ export function App() {
 
       <Orb state={state} micStream={micStream} remoteStream={remoteStream} />
 
-      <StatusBadge state={state} />
+      <div className="flex items-center gap-2">
+        <StatusBadge state={state} />
+        <LatencyBadge rttMs={rttMs} />
+      </div>
 
       <div className="flex gap-3">
         {state === 'disconnected' || state === 'error' ? (

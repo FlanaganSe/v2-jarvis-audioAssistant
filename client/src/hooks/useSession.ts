@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { VoiceState } from '../types.ts';
 import type { VadMode } from '../components/VadToggle.tsx';
 import { createSession, connectSideband } from '../api/session.ts';
@@ -21,6 +21,7 @@ export interface UseSessionReturn {
   readonly state: VoiceState;
   readonly transcript: readonly TranscriptEntry[];
   readonly vadMode: VadMode;
+  readonly rttMs: number | null;
   readonly connect: () => void;
   readonly disconnect: () => void;
   readonly startTalking: () => void;
@@ -36,6 +37,7 @@ export function useSession(): UseSessionReturn {
   const [micStream, setMicStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [vadMode, setVadModeState] = useState<VadMode>('ptt');
+  const [rttMs, setRttMs] = useState<number | null>(null);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
@@ -154,6 +156,37 @@ export function useSession(): UseSessionReturn {
     },
     [appendTranscript, finalizeTranscript],
   );
+
+  // Poll WebRTC stats for round-trip time while connected
+  useEffect(() => {
+    const isActive = state !== 'disconnected' && state !== 'error' && state !== 'connecting';
+    if (!isActive) {
+      setRttMs(null);
+      return;
+    }
+
+    const poll = async (): Promise<void> => {
+      const pc = pcRef.current;
+      if (!pc) return;
+      try {
+        const stats = await pc.getStats();
+        stats.forEach((report) => {
+          if (report.type === 'candidate-pair') {
+            const pair = report as RTCIceCandidatePairStats;
+            if (pair.nominated && typeof pair.currentRoundTripTime === 'number') {
+              setRttMs(Math.round(pair.currentRoundTripTime * 1000));
+            }
+          }
+        });
+      } catch {
+        // PC may be closed between check and getStats
+      }
+    };
+
+    const interval = setInterval(poll, 2000);
+    poll(); // immediate first read
+    return () => clearInterval(interval);
+  }, [state]);
 
   const connect = useCallback(async () => {
     cleanup();
@@ -364,6 +397,7 @@ export function useSession(): UseSessionReturn {
     state,
     transcript,
     vadMode,
+    rttMs,
     connect,
     disconnect,
     startTalking,
