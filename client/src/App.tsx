@@ -2,16 +2,27 @@ import { useSession } from './hooks/useSession.ts';
 import { StatusBadge } from './components/StatusBadge.tsx';
 import { PttButton } from './components/PttButton.tsx';
 import { Transcript } from './components/Transcript.tsx';
+import { Orb } from './components/Orb.tsx';
 
 export function App() {
-  const { state, transcript, connect, disconnect, startTalking, stopTalking } = useSession();
+  const {
+    state,
+    transcript,
+    connect,
+    disconnect,
+    startTalking,
+    stopTalking,
+    micStream,
+    remoteStream,
+  } = useSession();
 
   const isConnected = state !== 'disconnected' && state !== 'error' && state !== 'connecting';
-  const canTalk = isConnected;
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-gray-950 p-4 text-gray-100">
       <h1 className="text-3xl font-semibold tracking-tight">Jarvis</h1>
+
+      <Orb state={state} micStream={micStream} remoteStream={remoteStream} />
 
       <StatusBadge state={state} />
 
@@ -33,7 +44,7 @@ export function App() {
         )}
       </div>
 
-      <PttButton disabled={!canTalk} onStart={startTalking} onStop={stopTalking} />
+      <PttButton disabled={!isConnected} onStart={startTalking} onStop={stopTalking} />
 
       <Transcript entries={transcript} />
     </div>

@@ -7,3 +7,122 @@
     color: #f3f4f6;
   }
 }
+
+/* Orb */
+
+.orb {
+  --amplitude: 0;
+  position: relative;
+  width: 160px;
+  height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Glow layer — static box-shadow, animated opacity only (GPU composited) */
+.orb::before {
+  content: '';
+  position: absolute;
+  inset: -30%;
+  border-radius: 50%;
+  box-shadow:
+    0 0 20px 8px rgba(0, 200, 255, 0.3),
+    0 0 50px 20px rgba(0, 200, 255, 0.15),
+    0 0 100px 40px rgba(0, 200, 255, 0.05);
+  opacity: calc(0.2 + var(--amplitude) * 0.8);
+  transition: opacity 50ms linear;
+  pointer-events: none;
+}
+
+/* Core sphere with radial gradient depth */
+.orb__core {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background:
+    radial-gradient(ellipse 40% 35% at 35% 30%, rgba(255, 255, 255, 0.3) 0%, transparent 70%),
+    radial-gradient(
+      ellipse 80% 80% at 50% 40%,
+      hsl(195 100% 60%) 0%,
+      hsl(210 90% 30%) 60%,
+      hsl(220 80% 10%) 100%
+    );
+  transform: scale(calc(1 + var(--amplitude) * 0.15));
+  transition:
+    transform 50ms linear,
+    background 300ms ease;
+}
+
+/* State: idle — slow breathing */
+.orb[data-state='idle'] .orb__core {
+  animation: breathe 4s ease-in-out infinite;
+}
+
+/* State: listening — brighter, responsive */
+.orb[data-state='listening'] .orb__core {
+  background:
+    radial-gradient(ellipse 40% 35% at 35% 30%, rgba(255, 255, 255, 0.4) 0%, transparent 70%),
+    radial-gradient(
+      ellipse 80% 80% at 50% 40%,
+      hsl(195 100% 65%) 0%,
+      hsl(210 90% 40%) 60%,
+      hsl(220 80% 15%) 100%
+    );
+}
+
+/* State: speaking — bright cyan */
+.orb[data-state='speaking'] .orb__core {
+  background:
+    radial-gradient(ellipse 40% 35% at 35% 30%, rgba(255, 255, 255, 0.5) 0%, transparent 70%),
+    radial-gradient(
+      ellipse 80% 80% at 50% 40%,
+      hsl(195 100% 70%) 0%,
+      hsl(200 90% 45%) 60%,
+      hsl(210 80% 20%) 100%
+    );
+}
+
+/* State: working — purple with spinner ring */
+.orb[data-state='working'] .orb__core {
+  background:
+    radial-gradient(ellipse 40% 35% at 35% 30%, rgba(255, 255, 255, 0.3) 0%, transparent 70%),
+    radial-gradient(
+      ellipse 80% 80% at 50% 40%,
+      hsl(270 80% 60%) 0%,
+      hsl(280 70% 35%) 60%,
+      hsl(290 60% 15%) 100%
+    );
+}
+
+.orb[data-state='working']::before {
+  box-shadow:
+    0 0 20px 8px rgba(160, 80, 255, 0.3),
+    0 0 50px 20px rgba(160, 80, 255, 0.15);
+}
+
+.orb[data-state='working']::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  border: 2px solid rgba(160, 80, 255, 0.4);
+  border-top-color: transparent;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
