@@ -202,6 +202,7 @@ export function useSession(): UseSessionReturn {
             JSON.stringify({
               type: 'session.update',
               session: {
+                type: 'realtime',
                 turn_detection: {
                   type: 'semantic_vad',
                   eagerness: 'auto',
@@ -312,6 +313,7 @@ export function useSession(): UseSessionReturn {
         JSON.stringify({
           type: 'session.update',
           session: {
+            type: 'realtime',
             turn_detection: {
               type: 'semantic_vad',
               eagerness: 'auto',
@@ -327,7 +329,7 @@ export function useSession(): UseSessionReturn {
       dc.send(
         JSON.stringify({
           type: 'session.update',
-          session: { turn_detection: null },
+          session: { type: 'realtime', turn_detection: null },
         }),
       );
       if (track) track.enabled = false;
