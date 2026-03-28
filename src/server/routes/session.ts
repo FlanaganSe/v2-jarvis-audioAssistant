@@ -118,12 +118,14 @@ const buildToolHandler = (
 };
 
 export const sessionRoutes = (config: Config, db?: Db): FastifyPluginAsync => {
-  const octokit = config.GITHUB_TOKEN ? createOctokitClient(config.GITHUB_TOKEN) : null;
   const hasFullTools = !!db;
   const basePrompt = hasFullTools ? SYSTEM_PROMPT : BASE_SYSTEM_PROMPT;
-  const tools = hasFullTools ? buildToolDefs(!!octokit) : [ECHO_TOOL_DEF];
 
   return async (app) => {
+    const octokit = config.GITHUB_TOKEN
+      ? createOctokitClient(config.GITHUB_TOKEN, { warn: (msg) => app.log.warn(msg) })
+      : null;
+    const tools = hasFullTools ? buildToolDefs(!!octokit) : [ECHO_TOOL_DEF];
     const toolHandler = buildToolHandler(db, octokit, app.log.warn.bind(app.log));
     app.post('/session', async (_req, reply) => {
       const response = await fetch('https://api.openai.com/v1/realtime/client_secrets', {

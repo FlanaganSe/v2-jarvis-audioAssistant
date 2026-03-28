@@ -12,6 +12,7 @@ coverage/
 .DS_Store
 
 .mcp.json
+.plans/
 
 # Ignore eval runs; may unignore later
 .eval-runs

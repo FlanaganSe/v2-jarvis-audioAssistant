@@ -79,3 +79,11 @@
 **Context:** OpenAI Realtime API beta events deprecated April 30, 2026. Codebase used 3 deprecated event names and a deprecated header.
 **Decision:** Migrated all event names to GA (`response.output_audio_transcript.delta/done`). Removed `OpenAI-Beta: realtime=v1` header. Added `input_audio_buffer.clear` + `output_audio_buffer.clear` to PTT sequence per GA docs.
 **Consequences:** Protocol-compliant before deadline. PTT no longer bleeds stale audio on interrupt.
+
+### ADR-011: Data channel as sole client notification path (no SSE/push)
+
+**Date:** 2026-03-27
+**Status:** accepted
+**Context:** Needed to surface tool call activity and structured tool results (GitHub digest) on the client. Options: add SSE/server-push, poll the server, or use events already flowing through the OpenAI data channel.
+**Decision:** All client-visible tool data comes from existing channels: OpenAI data channel events (`response.function_call_arguments.done`, `conversation.item.created`), REST API calls, and browser APIs (`RTCPeerConnection.getStats()`). No new server→client push infrastructure.
+**Consequences:** Zero new infrastructure. Tool activity and GitHub digest are self-activating from DC events. Constraint: server-only state (e.g., current-session summary) cannot reach the client without a future push channel or polling.
