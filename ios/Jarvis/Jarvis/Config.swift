@@ -2,8 +2,8 @@ import Foundation
 
 enum Config {
     #if DEBUG
-    static let baseURL = URL(string: "http://localhost:3000")!
+    static let baseURL = URL(string: "https://trustworthy-solace-production-639b.up.railway.app")!
     #else
-    static let baseURL = URL(string: "https://v2-jarvis-audio-production.up.railway.app")!
+    static let baseURL = URL(string: "https://trustworthy-solace-production-639b.up.railway.app")!
     #endif
 }
