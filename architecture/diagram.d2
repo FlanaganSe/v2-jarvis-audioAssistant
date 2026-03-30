@@ -1,0 +1,56 @@
+direction: right
+
+user: User {shape: person}
+
+clients: Clients {
+  web: Web Client\n(React + Vite)
+  ios: iOS Client\n(SwiftUI)
+}
+
+server: Fastify Server {
+  api: REST API
+  sideband: Sideband\nManager
+  tools: Tool Handlers
+  summarizer: Summary\nGenerator
+}
+
+db: PostgreSQL {shape: cylinder}
+
+openai: OpenAI {
+  realtime: Realtime API
+  chat: Chat API\n(gpt-4o-mini)
+}
+
+github: GitHub API {shape: cloud}
+meteo: Open-Meteo API {shape: cloud}
+
+# User to clients
+user -> clients.web: Browser
+user -> clients.ios: Native App
+
+# Clients to OpenAI (direct audio)
+clients.web -> openai.realtime: WebRTC (audio)
+clients.ios -> openai.realtime: WebRTC (audio)
+
+# Clients to server
+clients.web -> server.api: HTTPS REST
+clients.ios -> server.api: HTTPS REST
+
+# Server internal
+server.api -> server.sideband: Start session
+server.sideband -> server.tools: Dispatch tool calls
+server.sideband -> server.summarizer: Session end
+
+# Server to OpenAI
+server.sideband -> openai.realtime: WebSocket (sideband)
+server.summarizer -> openai.chat: HTTPS
+
+# Server to database
+server.api -> db: SQL (Drizzle)
+server.sideband -> db: SQL (persist turns)
+server.summarizer -> db: SQL (save summary)
+
+# Tool handlers to external APIs
+server.tools -> github: HTTPS (Octokit)
+server.tools -> meteo: HTTPS
+server.tools -> db: SQL (recall + evidence)

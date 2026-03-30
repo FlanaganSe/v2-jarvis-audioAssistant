@@ -4,6 +4,20 @@
 
 Jarvis is a real-time voice assistant demo. You talk to it, it talks back. It can check the weather, look up GitHub repos/issues/PRs, recall past conversations, and describe its own capabilities. Audio streams directly between the client (browser or iOS) and OpenAI via WebRTC — the server never touches audio. The server participates only to mint sessions and execute tools via a sideband WebSocket to the same OpenAI session. Two clients exist: a React web app and a native SwiftUI iOS app.
 
+## Stack
+
+- **Language:** TypeScript (Node.js 22+, TypeScript 5.x)
+- **Server:** Fastify 5 + Drizzle ORM + `ws` WebSocket library
+- **Frontend:** React 19 + Vite 6 + Tailwind CSS v4 (standalone `client/` package)
+- **iOS:** SwiftUI + `stasel/WebRTC` (SPM) — targets iOS 16.4+
+- **Database:** PostgreSQL (Railway-hosted), `postgres-js` driver
+- **AI:** OpenAI Realtime API (WebRTC + sideband WS), `gpt-4o-mini` for summaries
+- **GitHub integration:** `@octokit/rest` with throttle plugin
+- **Package manager:** npm (no workspaces — `client/` has its own `package.json`, auto-installed via `postinstall`)
+- **Test framework:** Vitest 3 (unit/integration) + `agent-eval-kit` (LLM behavioral evals)
+- **Linter/formatter:** ESLint 9 + Prettier (single quotes, trailing commas, 100 char width)
+- **Deployment:** Railway via 3-stage Dockerfile (client-builder → server-builder → runtime on `node:22-alpine`)
+
 ## Architecture
 
 A request flows through two parallel paths:
@@ -76,7 +90,7 @@ client/
 ios/
   Jarvis/Jarvis/
     JarvisApp.swift            # SwiftUI app entry point
-    Config.swift               # Base URL (localhost debug, Railway prod)
+    Config.swift               # Base URL (currently Railway prod for both DEBUG and RELEASE)
     APIClient.swift            # URLSession wrappers for server endpoints
     Models.swift               # VoiceState, TranscriptEntry, GitHubDigest, RealtimeEvent
     WebRTCManager.swift        # RTCPeerConnection lifecycle, data channel, state machine
@@ -185,13 +199,35 @@ disconnected → connecting → ready → listening | processing | working | spe
 
 ## Environment
 
-See [.env.example](../.env.example) for all variables. Validated at startup via Zod — server crashes immediately if `OPENAI_API_KEY` is missing. Tools degrade gracefully when optional vars are absent.
+| Variable         | Required | Default       | Purpose                                         |
+| ---------------- | -------- | ------------- | ----------------------------------------------- |
+| `OPENAI_API_KEY` | Yes      | —             | Realtime API + summary generation               |
+| `DATABASE_URL`   | No       | —             | PostgreSQL connection; without it → echo-only   |
+| `GITHUB_TOKEN`   | No       | —             | Fine-grained PAT (read-only); without → no tool |
+| `PORT`           | No       | `3000`        | Server listen port                              |
+| `NODE_ENV`       | No       | `development` | `development` / `production` / `test`           |
+
+Validated at startup via Zod — server crashes immediately if `OPENAI_API_KEY` is missing. Tools degrade gracefully when optional vars are absent. See [.env.example](../.env.example).
+
+**Dev scripts:** `npm run dev` starts the server with `tsx watch`. `npm run dev:all` runs server + Vite client concurrently via `concurrently`.
 
 ## Testing
 
 63 unit tests across 9 files. See [TESTING.md](TESTING.md) for coverage details and the manual QA runbook.
 
+**LLM evals:** `agent-eval-kit` runs behavioral evals via `npm run eval`. Two suites: `refusal-accuracy` (5 cases — refuses weather/github for general knowledge, code, math, news) and `evidence-attachment` (3 cases — weather queries must call the tool and return evidence). Evals use record-replay for zero-cost CI; recording requires a live server + API keys (ADR-005).
+
 For architecture decision records, see [decisions.md](decisions.md).
+
+## Important decisions and tradeoffs
+
+These are intentional — don't "fix" them without understanding why they exist. Full reasoning in [decisions.md](decisions.md).
+
+- **Raw WebRTC + raw WebSocket, no SDK (ADR-001).** Maximizes latency control and avoids coupling to OpenAI's unstable SDK. Tradeoff: more manual protocol handling.
+- **SQL-first memory, no vector search (ADR-003).** Works on vanilla PostgreSQL without extensions. Schema accommodates a future `pgvector` column as an additive migration. Tradeoff: no semantic similarity, keyword/date recall only.
+- **No workspaces (ADR-004).** Root and `client/` have fully isolated TypeScript configs and `node_modules`. Prevents Node16 ↔ bundler resolution contamination. Tradeoff: two installs, `postinstall` hook.
+- **Data channel as sole client notification path (ADR-011).** Avoids adding SSE or server-push infrastructure. Tradeoff: server-only state (e.g., in-progress summary) can't reach the client without polling or a future push channel.
+- **Sideband uses ephemeral key, not API key (ADR-009).** Required by OpenAI's endpoint. The key transits server→client→server but is already browser-resident from the SDP exchange.
 
 ## Gotchas
 
@@ -205,6 +241,6 @@ For architecture decision records, see [decisions.md](decisions.md).
 - **GitHub digest is client-parsed.** Tool output JSON is parsed client-side from `conversation.item.created` events. Error payloads (missing `type` field) are rejected silently. Digest clears on non-GitHub tool calls to avoid stale display.
 - **Two separate `node_modules`.** Root and `client/` each have their own. `postinstall` auto-installs client deps. Docker build handles this across stages.
 - **iOS uses `stasel/WebRTC` via SPM.** This is a precompiled binary of Google's `libwebrtc`. The Xcode project resolves it; there's no CocoaPods or Carthage. No `Package.swift` at the repo root.
-- **iOS `Config.swift` has two base URLs.** `#if DEBUG` points to `localhost:3000`; release points to the Railway production URL. The iOS app cannot reach the dev server unless the device/simulator is on the same network.
+- **iOS `Config.swift` currently points to Railway production for both DEBUG and RELEASE.** The `#if DEBUG` / `#else` scaffolding exists but both branches use the same production URL. To develop against a local server, temporarily change the DEBUG URL to `http://localhost:3000`.
 - **iOS `WebRTCManager` is `@MainActor`.** All state mutations happen on the main thread. Delegate callbacks from WebRTC (which fire on internal threads) dispatch to `@MainActor` via `Task`.
 - **iOS audio session uses `.videoChat` mode.** This enables echo cancellation and automatic gain control. The category is `.playAndRecord` with `.defaultToSpeaker` and `.allowBluetoothA2DP`.
